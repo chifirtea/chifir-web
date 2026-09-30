@@ -16,9 +16,11 @@ import { Button } from "@/components/ui/Button";
 import { LoadingScreen } from "@/components/ui/LoadingScreen";
 import { CityCanvas } from "@/engine/canvas/CityCanvas";
 import { VirtualJoystick } from "@/engine/input/VirtualJoystick";
+import { HighlightLayer } from "@/engine/interaction/HighlightLayer";
 import { HotspotScanner } from "@/engine/interaction/HotspotScanner";
 import { WaypointBeacon } from "@/engine/navigation/WaypointBeacon";
 import { Player } from "@/engine/player/Player";
+import { PresenceLayer } from "@/engine/presence/PresenceLayer";
 import { setRigPose } from "@/engine/player/playerRig";
 import { useWorldStore, type PlayerPose } from "@/engine/store/worldStore";
 import { Fade } from "@/engine/transitions/Fade";
@@ -27,10 +29,12 @@ import { EmployeePanel } from "@/features/ai/EmployeePanel";
 import { AnalyticsProvider } from "@/features/analytics/AnalyticsProvider";
 import { ErrorBoundary } from "@/features/analytics/ErrorBoundary";
 import { CartDrawer } from "@/features/cart/CartDrawer";
+import { MerchantPanel } from "@/features/catalog/MerchantPanel";
 import { ProductPanel } from "@/features/catalog/ProductPanel";
 import { DebugBridge } from "@/features/hud/DebugBridge";
 import { Hud } from "@/features/hud/Hud";
 import { PlacesPanel } from "@/features/hud/PlacesPanel";
+import { PerfHud } from "@/features/perf/PerfHud";
 import { Toast } from "@/features/hud/Toast";
 import { track } from "@/lib/analytics/client";
 import type { CitySnapshot } from "@/lib/data/types";
@@ -181,8 +185,10 @@ export function CityApp({ snapshot, deepLinkTo, ask, checkout, clockOffsetMs }: 
               <InteriorScene merchantId={location.merchantId} parcelId={location.parcelId} />
             )}
             <Player />
+            <PresenceLayer />
             <HotspotScanner />
             <WaypointBeacon />
+            <HighlightLayer />
           </CityCanvas>
         </ErrorBoundary>
 
@@ -191,10 +197,12 @@ export function CityApp({ snapshot, deepLinkTo, ask, checkout, clockOffsetMs }: 
         {process.env.NODE_ENV !== "production" ? <DebugBridge /> : null}
 
         <ProductPanel />
+        <MerchantPanel />
         <CartDrawer />
         <ConciergeDrawer />
         <EmployeePanel />
         <PlacesPanel />
+        <PerfHud />
 
         <Fade />
 

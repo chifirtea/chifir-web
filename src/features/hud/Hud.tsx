@@ -4,6 +4,8 @@ import { Map as MapIcon } from "lucide-react";
 import { ConciergeButton } from "@/features/ai/ConciergeButton";
 import { AuthMenu } from "@/features/auth/AuthMenu";
 import { CartButton } from "@/features/cart/CartButton";
+import { EventHud } from "@/features/events/EventHud";
+import { PartyHud } from "@/features/party/PartyHud";
 import { useInputStore } from "@/engine/input/inputStore";
 import { useWorldStore } from "@/engine/store/worldStore";
 import { ControlsHint } from "./ControlsHint";
@@ -43,6 +45,7 @@ export function Hud() {
         <div className="flex items-start justify-between gap-3">
           <LocationBadge />
           <div className="flex shrink-0 items-center gap-2">
+            <PartyHud className="pointer-events-auto" />
             <PlacesButton />
             <ConciergeButton className="pointer-events-auto" />
             <CartButton className="pointer-events-auto" />
@@ -51,6 +54,9 @@ export function Hud() {
         </div>
         <div className="flex justify-center">
           <WaypointChevron />
+        </div>
+        <div className="flex justify-center">
+          <EventHud />
         </div>
       </div>
 
