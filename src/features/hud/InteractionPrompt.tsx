@@ -31,6 +31,7 @@ export function InteractionPrompt() {
   return (
     <button
       type="button"
+      data-testid="interaction-prompt"
       onClick={() => interactWithHotspot(hotspot)}
       className="pointer-events-auto flex h-12 min-w-[44px] items-center gap-3 rounded-full border border-line bg-ink/92 pr-2 pl-4 text-fog shadow-sign backdrop-blur-md transition-transform active:scale-[0.98]"
     >

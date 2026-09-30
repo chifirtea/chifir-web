@@ -13,6 +13,7 @@ export function ConciergeButton({ className }: { className?: string }) {
   const setConciergeOpen = useWorldStore((s) => s.setConciergeOpen);
   return (
     <button
+      data-testid="concierge-button"
       type="button"
       onClick={() => setConciergeOpen(true)}
       aria-label="Ask the city"

@@ -70,7 +70,7 @@ export function LocationBadge() {
       };
 
   return (
-    <div role="status" aria-live="polite" className="pointer-events-auto select-none">
+    <div role="status" aria-live="polite" data-testid="location-badge" className="pointer-events-auto select-none">
       <div
         className="relative rounded-[10px] px-4 py-2 shadow-sign"
         style={{

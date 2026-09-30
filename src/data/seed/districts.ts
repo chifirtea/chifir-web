@@ -9,7 +9,7 @@ export const districts: District[] = [
     description: "Where everyone arrives. Fountains, benches, and the road to everything else.",
     theme: { accent: "#FFC46B", ambience: "warm", pavement: "plaza" },
     bounds: { minX: -40, minZ: -40, maxX: 40, maxZ: 40 },
-    spawnPoint: { x: 0, z: 26, yaw: Math.PI },
+    spawnPoint: { x: 0, z: 21, yaw: Math.PI },
     sortOrder: 0,
   },
   {

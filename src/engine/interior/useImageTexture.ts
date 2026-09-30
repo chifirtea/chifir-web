@@ -78,16 +78,18 @@ export function loadImageTexture(url: string, listener: Listener): () => void {
 
 /** The image as a texture once loaded; `fallback` until then and forever after a failure. */
 export function useImageTexture(url: string | undefined, fallback: THREE.Texture): THREE.Texture {
-  const [loaded, setLoaded] = useState<THREE.Texture | null>(() => (url ? (entries.get(url)?.texture ?? null) : null));
+  // State is keyed by the url it was loaded for, so a url change never shows a stale texture and
+  // never needs a synchronous reset inside the effect.
+  const [loaded, setLoaded] = useState<{ url: string; texture: THREE.Texture | null }>(() => ({
+    url: url ?? "",
+    texture: url ? (entries.get(url)?.texture ?? null) : null,
+  }));
 
   useEffect(() => {
-    if (!url) {
-      setLoaded(null);
-      return;
-    }
+    if (!url) return;
     let active = true;
     const unsubscribe = loadImageTexture(url, (texture) => {
-      if (active) setLoaded(texture);
+      if (active) setLoaded({ url, texture });
     });
     return () => {
       active = false;
@@ -95,5 +97,6 @@ export function useImageTexture(url: string | undefined, fallback: THREE.Texture
     };
   }, [url]);
 
-  return loaded ?? fallback;
+  const current = url && loaded.url === url ? loaded.texture : url ? (entries.get(url)?.texture ?? null) : null;
+  return current ?? fallback;
 }

@@ -35,6 +35,7 @@ export function CartButton({ className }: { className?: string }) {
   const shown = mounted ? count : 0;
   return (
     <button
+      data-testid="cart-button"
       type="button"
       onClick={() => setCartOpen(true)}
       aria-label={shown > 0 ? `Open cart, ${shown} ${shown === 1 ? "item" : "items"}` : "Open cart"}

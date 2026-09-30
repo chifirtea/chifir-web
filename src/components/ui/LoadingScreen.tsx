@@ -36,6 +36,8 @@ export function LoadingScreen({
 
   return (
     <div
+      data-loading-screen=""
+      data-hidden={hidden ? "true" : "false"}
       role="status"
       aria-live="polite"
       aria-hidden={hidden}

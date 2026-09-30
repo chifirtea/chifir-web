@@ -26,9 +26,11 @@ export default defineConfig([
     },
   },
   {
-    // React Three Fiber elements use three.js props (position, args, intensity, ...).
-    files: ["src/engine/**/*.tsx", "src/city/**/*.tsx"],
-    rules: { "react/no-unknown-property": "off" },
+    // React Three Fiber elements use three.js props (position, args, intensity, ...), and frame
+    // loops mutate three.js objects (materials, uniforms, scene fog) by design. The compiler's
+    // immutability rule cannot tell those from React state, so it is off for engine code only.
+    files: ["src/engine/**/*.{ts,tsx}", "src/city/**/*.{ts,tsx}"],
+    rules: { "react/no-unknown-property": "off", "react-hooks/immutability": "off" },
   },
   {
     // Keep the /city bundle small: no namespace imports of drei/three (they defeat tree-shaking).

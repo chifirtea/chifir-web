@@ -27,7 +27,7 @@ const rank = (tier: QualityTier) => QUALITY_TIERS.indexOf(tier);
 
 function onCreated({ gl }: RootState) {
   gl.toneMapping = ACESFilmicToneMapping;
-  gl.toneMappingExposure = 1.05;
+  gl.toneMappingExposure = 1.22;
   gl.outputColorSpace = SRGBColorSpace;
   gl.shadowMap.type = PCFSoftShadowMap;
 }

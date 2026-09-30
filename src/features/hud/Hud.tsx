@@ -24,8 +24,11 @@ export function Hud() {
   const touchStore = useInputStore((s) => s.touch);
   const coarse = useIsTouch();
   const touch = touchStore || coarse;
+  const ready = useWorldStore((s) => s.ready);
   return (
     <div
+      data-testid="hud"
+      data-ready={ready ? "true" : "false"}
       className="pointer-events-none fixed inset-0 z-20 flex flex-col justify-between"
       style={{
         paddingTop: "max(12px, env(safe-area-inset-top))",
@@ -55,6 +58,7 @@ export function Hud() {
         <ControlsHint />
         <InteractionPrompt />
       </div>
+      {ready ? <span data-testid="city-ready" className="sr-only">City ready</span> : null}
 
       {IS_DEV ? (
         <div
@@ -72,6 +76,7 @@ function PlacesButton() {
   const setPlacesOpen = useWorldStore((s) => s.setPlacesOpen);
   return (
     <button
+      data-testid="places-button"
       type="button"
       onClick={() => setPlacesOpen(true)}
       aria-label="Places and tonight's events"
