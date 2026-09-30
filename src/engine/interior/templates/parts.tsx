@@ -50,6 +50,9 @@ export function roomColliders(room: InteriorTemplateDef["room"], origin: { x: nu
     aabbFromCenter("wall:right", ox + W / 2 + WALL_T / 2, oz, WALL_T, D + WALL_T * 2),
     aabbFromCenter("wall:front-left", ox - DOOR_GAP / 2 - side / 2, oz + D / 2 + WALL_T / 2, side, WALL_T),
     aabbFromCenter("wall:front-right", ox + DOOR_GAP / 2 + side / 2, oz + D / 2 + WALL_T / 2, side, WALL_T),
+    // The doorway itself: the exit is a hotspot inside the room, so nobody walks through it, and
+    // closing it keeps the follow camera inside the room instead of behind the lintel.
+    aabbFromCenter("door:camera", ox, oz + D / 2 + WALL_T / 2, DOOR_GAP + 0.2, WALL_T),
     aabbFromCenter("wall:vestibule", ox, oz + D / 2 + 1.7, DOOR_GAP + 1.2, WALL_T),
     aabbFromCenter("wall:vestibule-left", ox - DOOR_GAP / 2 - 0.3, oz + D / 2 + 0.9, 0.3, 1.8),
     aabbFromCenter("wall:vestibule-right", ox + DOOR_GAP / 2 + 0.3, oz + D / 2 + 0.9, 0.3, 1.8),
