@@ -80,7 +80,7 @@ function plasterTexture(base: string, size: number): THREE.CanvasTexture | null 
   });
 }
 
-function concreteTexture(base: string, size: number): THREE.CanvasTexture | null {
+export function concreteTexture(base: string, size: number): THREE.CanvasTexture | null {
   return patternTexture(`concrete|${base}|${size}`, size, (ctx, s) => {
     ctx.fillStyle = base;
     ctx.fillRect(0, 0, s, s);
@@ -245,8 +245,8 @@ export function roadTexture(size: number): THREE.CanvasTexture | null {
     noise(ctx, s, 43, 0.25, 0.06);
     // Centre dashes (U runs along the road, V across it).
     ctx.fillStyle = "rgba(236, 222, 170, 0.55)";
-    const dash = s / 4;
-    for (let x = 0; x < s; x += dash) ctx.fillRect(x + dash * 0.15, s / 2 - s * 0.01, dash * 0.45, s * 0.02);
+    const dash = s / 2;
+    for (let x = 0; x < s; x += dash) ctx.fillRect(x + dash * 0.1, s / 2 - s * 0.01, dash * 0.4, s * 0.02);
     // Edge lines.
     ctx.fillStyle = "rgba(236, 236, 236, 0.35)";
     ctx.fillRect(0, s * 0.045, s, s * 0.012);
@@ -281,5 +281,33 @@ export function pavementTexture(size: number): THREE.CanvasTexture | null {
       }
     }
     noise(ctx, s, 53, 0.1, 0.05);
+  });
+}
+
+/** Horizontal floorboards for interiors. */
+export function plankTexture(base: string, size: number): THREE.CanvasTexture | null {
+  return patternTexture(`plank|${base}|${size}`, size, (ctx, s) => {
+    const rand = mulberry32(59);
+    const rows = 10;
+    const h = s / rows;
+    for (let r = 0; r < rows; r++) {
+      const tone = (rand() - 0.5) * 0.26;
+      ctx.fillStyle = mixHex(base, tone > 0 ? "#ffffff" : "#000000", Math.abs(tone));
+      ctx.fillRect(0, r * h, s, h);
+      ctx.fillStyle = "rgba(0,0,0,0.35)";
+      ctx.fillRect(0, r * h, s, 2);
+      // Board ends at staggered positions.
+      const cut = ((r * 0.37 + rand() * 0.2) % 1) * s;
+      ctx.fillRect(cut, r * h, 2, h);
+      ctx.strokeStyle = "rgba(0,0,0,0.08)";
+      ctx.lineWidth = 1;
+      for (let g = 0; g < 3; g++) {
+        const y = r * h + 3 + rand() * (h - 6);
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.bezierCurveTo(s * 0.33, y + (rand() - 0.5) * 4, s * 0.66, y + (rand() - 0.5) * 4, s, y + (rand() - 0.5) * 3);
+        ctx.stroke();
+      }
+    }
   });
 }

@@ -16,6 +16,8 @@ export interface InstanceTransform {
   yaw?: number;
   /** Rotation around +X (e.g. a tilted awning or bench back). */
   tiltX?: number;
+  /** Rotation around +Z (e.g. a cylinder laid along X). */
+  tiltZ?: number;
   sx?: number;
   sy?: number;
   sz?: number;
@@ -45,7 +47,7 @@ export function StaticInstances({ geometry, material, items, castShadow = false,
     for (let i = 0; i < items.length; i++) {
       const it = items[i]!;
       tmp.position.set(it.x, it.y, it.z);
-      tmp.rotation.set(it.tiltX ?? 0, it.yaw ?? 0, 0);
+      tmp.rotation.set(it.tiltX ?? 0, it.yaw ?? 0, it.tiltZ ?? 0);
       tmp.scale.set(it.sx ?? 1, it.sy ?? 1, it.sz ?? 1);
       tmp.updateMatrix();
       mesh.setMatrixAt(i, tmp.matrix);

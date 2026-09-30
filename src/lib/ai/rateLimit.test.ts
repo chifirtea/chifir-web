@@ -40,7 +40,8 @@ describe("createRateLimiter", () => {
       if (rl.consume("k").ok) accepted++;
       c.advance(1_000);
     }
-    expect(accepted).toBe(25); // burst 5 + 20 refilled over the 10-minute window
+    // 5 from the burst, then one every 30 s once the bucket is empty (t = 4 s): 5 + floor(596 / 30) = 24.
+    expect(accepted).toBe(24);
   });
 
   it("keeps keys independent and sweeps idle buckets", () => {

@@ -240,7 +240,7 @@ describe("AnthropicProvider loop", () => {
     expect(r.stopReason).toBe("end");
     expect(toolCalls).toHaveLength(0);
     expect(r.toolsUsed).toEqual([]);
-    const results = calls[1]!.messages[2]!.content as Array<Record<string, unknown>>;
+    const results = calls[1]!.messages[2]!.content as unknown as Array<Record<string, unknown>>;
     expect(results[0]).toEqual({
       type: "tool_result",
       tool_use_id: "tu_1",
@@ -299,7 +299,7 @@ describe("AnthropicProvider loop", () => {
     const r = await result;
     spy.mockRestore();
     expect(r.stopReason).toBe("end");
-    const results = calls[1]!.messages[2]!.content as Array<Record<string, unknown>>;
+    const results = calls[1]!.messages[2]!.content as unknown as Array<Record<string, unknown>>;
     expect(results[0]).toMatchObject({ tool_use_id: "tu_1", is_error: true });
   });
 });
