@@ -22,7 +22,8 @@ export async function POST(req: NextRequest) {
   const order = await ds.getOrder(parsed.data.orderId);
   if (!order) return notFound();
   if (!authorizeOrderAccess(order, { token: parsed.data.token })) return forbidden();
-  if (order.paymentProvider !== "demo") return jsonError(400, "This order is not payable with the demo rail.");
+  if (order.paymentProvider !== "demo")
+    return jsonError(400, "This order is not payable with the demo rail.");
 
   try {
     const paid = await ds.markOrderPaid(order.id, { paidAt: new Date().toISOString() });

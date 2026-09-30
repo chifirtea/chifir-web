@@ -4,7 +4,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Check, ExternalLink, Sparkles } from "lucide-react";
-import type { DigitalReward, FulfillmentStatus, FulfillmentType, OrderFulfillment, OrderItem } from "@/types/domain";
+import type {
+  DigitalReward,
+  FulfillmentStatus,
+  FulfillmentType,
+  OrderFulfillment,
+  OrderItem,
+} from "@/types/domain";
 import { Badge, Button, ProductImage } from "@/components/ui";
 import { cn } from "@/lib/utils/cn";
 import { formatCents } from "@/lib/utils/money";
@@ -47,13 +53,45 @@ const COMMON: Step[] = [
   { status: "accepted", label: "Accepted" },
 ];
 const STEPS: Record<FulfillmentType, Step[]> = {
-  delivery: [...COMMON, { status: "preparing", label: "Preparing" }, { status: "out_for_delivery", label: "Out for delivery" }, { status: "delivered", label: "Delivered" }],
-  pickup: [...COMMON, { status: "preparing", label: "Preparing" }, { status: "ready", label: "Ready for pickup" }, { status: "delivered", label: "Picked up" }],
-  booking: [...COMMON, { status: "preparing", label: "Preparing" }, { status: "ready", label: "Ready" }, { status: "delivered", label: "Done" }],
-  shipping: [...COMMON, { status: "preparing", label: "Packing" }, { status: "shipped", label: "Shipped" }, { status: "delivered", label: "Delivered" }],
-  ticket: [{ status: "pending", label: "Placed" }, { status: "accepted", label: "Confirmed" }, { status: "delivered", label: "Tickets issued" }],
-  digital: [{ status: "pending", label: "Placed" }, { status: "accepted", label: "Confirmed" }, { status: "delivered", label: "Delivered to your account" }],
-  lead: [{ status: "pending", label: "Placed" }, { status: "accepted", label: "Received" }, { status: "delivered", label: "Sent to the merchant" }],
+  delivery: [
+    ...COMMON,
+    { status: "preparing", label: "Preparing" },
+    { status: "out_for_delivery", label: "Out for delivery" },
+    { status: "delivered", label: "Delivered" },
+  ],
+  pickup: [
+    ...COMMON,
+    { status: "preparing", label: "Preparing" },
+    { status: "ready", label: "Ready for pickup" },
+    { status: "delivered", label: "Picked up" },
+  ],
+  booking: [
+    ...COMMON,
+    { status: "preparing", label: "Preparing" },
+    { status: "ready", label: "Ready" },
+    { status: "delivered", label: "Done" },
+  ],
+  shipping: [
+    ...COMMON,
+    { status: "preparing", label: "Packing" },
+    { status: "shipped", label: "Shipped" },
+    { status: "delivered", label: "Delivered" },
+  ],
+  ticket: [
+    { status: "pending", label: "Placed" },
+    { status: "accepted", label: "Confirmed" },
+    { status: "delivered", label: "Tickets issued" },
+  ],
+  digital: [
+    { status: "pending", label: "Placed" },
+    { status: "accepted", label: "Confirmed" },
+    { status: "delivered", label: "Delivered to your account" },
+  ],
+  lead: [
+    { status: "pending", label: "Placed" },
+    { status: "accepted", label: "Received" },
+    { status: "delivered", label: "Sent to the merchant" },
+  ],
 };
 const TYPE_NAME: Record<FulfillmentType, string> = {
   delivery: "Delivery",
@@ -66,7 +104,9 @@ const TYPE_NAME: Record<FulfillmentType, string> = {
 };
 
 function headline(order: PublicOrder): { title: string; subtitle: string } {
-  const merchants = [...new Set(order.fulfillments.map((f) => f.merchantNameSnapshot).filter(Boolean))];
+  const merchants = [
+    ...new Set(order.fulfillments.map((f) => f.merchantNameSnapshot).filter(Boolean)),
+  ];
   const where = merchants.length ? merchants.join(" and ") : "the city";
   switch (order.status) {
     case "pending_payment":
@@ -82,11 +122,20 @@ function headline(order: PublicOrder): { title: string; subtitle: string } {
       };
     }
     case "completed":
-      return { title: "Delivered", subtitle: "Everything has arrived. Thanks for shopping the city." };
+      return {
+        title: "Delivered",
+        subtitle: "Everything has arrived. Thanks for shopping the city.",
+      };
     case "cancelled":
-      return { title: "Cancelled", subtitle: "This order was not paid and has been closed. Nothing was charged." };
+      return {
+        title: "Cancelled",
+        subtitle: "This order was not paid and has been closed. Nothing was charged.",
+      };
     case "payment_failed":
-      return { title: "Payment failed", subtitle: "Nothing was charged. You can try again from your cart." };
+      return {
+        title: "Payment failed",
+        subtitle: "Nothing was charged. You can try again from your cart.",
+      };
     case "refunded":
       return { title: "Refunded", subtitle: "This order was refunded." };
   }
@@ -94,18 +143,43 @@ function headline(order: PublicOrder): { title: string; subtitle: string } {
 
 function fmtTime(iso: string): string {
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? "" : d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  return Number.isNaN(d.getTime())
+    ? ""
+    : d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 
 function fmtEta(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
   const sameDay = d.toDateString() === new Date().toDateString();
-  return sameDay ? `today by ${fmtTime(iso)}` : `by ${d.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}`;
+  return sameDay
+    ? `today by ${fmtTime(iso)}`
+    : `by ${d.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}`;
 }
 
-export function OrderStatus({ initialOrder, token, sessionId, rewards, offerTitles, initialUserId }: OrderStatusProps) {
+export function OrderStatus({
+  initialOrder,
+  token,
+  sessionId,
+  rewards,
+  offerTitles,
+  initialUserId,
+}: OrderStatusProps) {
   const [order, setOrder] = useState<PublicOrder>(initialOrder);
+
+  // Once this order is paid, the cart it came from is done. Clear it exactly once per order so
+  // items added later (e.g. "Order again") survive a revisit of this page.
+  useEffect(() => {
+    if (!PAID.has(order.status)) return;
+    const key = `chifir.cart.cleared.${order.id}`;
+    try {
+      if (localStorage.getItem(key)) return;
+      localStorage.setItem(key, "1");
+    } catch {
+      // Private mode: fall through and clear anyway.
+    }
+    useCartStore.getState().clear();
+  }, [order.id, order.status]);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [claim, setClaim] = useState<"idle" | "claimed" | "failed">("idle");
   const { user } = useUser();
@@ -205,7 +279,12 @@ export function OrderStatus({ initialOrder, token, sessionId, rewards, offerTitl
     const cart = useCartStore.getState();
     for (const item of order.items) {
       if (!item.productId || !item.merchantId) continue;
-      cart.addLine({ productId: item.productId, merchantId: item.merchantId, quantity: item.quantity, variantSelection: item.variantSelection });
+      cart.addLine({
+        productId: item.productId,
+        merchantId: item.merchantId,
+        quantity: item.quantity,
+        variantSelection: item.variantSelection,
+      });
     }
     const first = order.items.find((i) => i.merchantId)?.merchantId;
     router.push(first ? `/city?to=${encodeURIComponent(first)}` : "/city");
@@ -217,13 +296,16 @@ export function OrderStatus({ initialOrder, token, sessionId, rewards, offerTitl
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <p className="eyebrow mb-2">Order · {order.id.slice(-8).toUpperCase()}</p>
-            <h1 className="font-display text-3xl font-semibold tracking-tight sm:text-4xl">{title}</h1>
+            <h1 className="font-display text-3xl font-semibold tracking-tight sm:text-4xl">
+              {title}
+            </h1>
             <p className="mt-1 text-fog-2">{subtitle}</p>
             <p className="mt-2 text-xs text-fog-3">
-              Placed {placed.toLocaleDateString([], { month: "short", day: "numeric" })} at {fmtTime(order.placedAt)} · receipt to {order.contact.email}
+              Placed {placed.toLocaleDateString([], { month: "short", day: "numeric" })} at{" "}
+              {fmtTime(order.placedAt)} · receipt to {order.contact.email}
             </p>
           </div>
-          <span className="stamp text-sm">Get it IRL</span>
+          <span className="stamp">Get it IRL</span>
         </div>
         {polling ? (
           <p className="mt-4 flex items-center gap-2 text-xs text-fog-3" aria-live="polite">
@@ -242,7 +324,10 @@ export function OrderStatus({ initialOrder, token, sessionId, rewards, offerTitl
 
       {rewardItems.length ? (
         <section className="sign p-5" aria-labelledby="rewards-title">
-          <h2 id="rewards-title" className="font-display flex items-center gap-2 text-lg font-semibold tracking-tight">
+          <h2
+            id="rewards-title"
+            className="font-display flex items-center gap-2 text-lg font-semibold tracking-tight"
+          >
             <Sparkles className="h-5 w-5 text-sky" aria-hidden="true" /> Digital twins
           </h2>
           <ul className="mt-3 space-y-2">
@@ -270,7 +355,9 @@ export function OrderStatus({ initialOrder, token, sessionId, rewards, offerTitl
               <p className="text-fog-2">Adding to your account…</p>
             ) : userId ? (
               <p className="text-fog-2">
-                {claim === "failed" ? "We could not attach this order to your account. Refresh to try again." : "Sign in with the account that placed this order to see its twins."}
+                {claim === "failed"
+                  ? "We could not attach this order to your account. Refresh to try again."
+                  : "Sign in with the account that placed this order to see its twins."}
               </p>
             ) : (
               <Link
@@ -288,28 +375,51 @@ export function OrderStatus({ initialOrder, token, sessionId, rewards, offerTitl
         <dl className="space-y-1.5 text-sm">
           <Row label="Subtotal" value={formatCents(order.subtotalCents, order.currency)} />
           {discountLines(order.items, offerTitles).map((d) => (
-            <Row key={d.key} label={d.label} value={`-${formatCents(d.cents, order.currency)}`} tone="mint" />
+            <Row
+              key={d.key}
+              label={d.label}
+              value={`-${formatCents(d.cents, order.currency)}`}
+              tone="mint"
+            />
           ))}
           {order.fulfillments
             .filter((f) => f.feeCents > 0)
             .map((f) => (
-              <Row key={f.id} label={`${f.type === "shipping" ? "Shipping" : "Delivery fee"} · ${f.merchantNameSnapshot}`} value={formatCents(f.feeCents, order.currency)} />
+              <Row
+                key={f.id}
+                label={`${f.type === "shipping" ? "Shipping" : "Delivery fee"} · ${f.merchantNameSnapshot}`}
+                value={formatCents(f.feeCents, order.currency)}
+              />
             ))}
-          {order.taxCents > 0 ? <Row label="Tax" value={formatCents(order.taxCents, order.currency)} /> : null}
+          {order.taxCents > 0 ? (
+            <Row label="Tax" value={formatCents(order.taxCents, order.currency)} />
+          ) : null}
           <Row label="Total" value={formatCents(order.totalCents, order.currency)} strong />
         </dl>
         {order.paidAt ? (
           <p className="mt-3 text-xs text-fog-3">
-            Paid {fmtTime(order.paidAt)} via {order.paymentProvider === "demo" ? "simulated payment (no money moved)" : "Stripe"}.
+            Paid {fmtTime(order.paidAt)} via{" "}
+            {order.paymentProvider === "demo" ? "simulated payment (no money moved)" : "Stripe"}.
           </p>
         ) : null}
       </section>
 
       <div className="flex flex-col gap-2 sm:flex-row">
-        <Button variant="secondary" size="lg" className="flex-1" onClick={() => router.push("/city")}>
+        <Button
+          variant="secondary"
+          size="lg"
+          className="flex-1"
+          onClick={() => router.push("/city")}
+        >
           Back to the city
         </Button>
-        <Button variant="ghost" size="lg" className="flex-1" onClick={orderAgain} disabled={!order.items.some((i) => i.productId)}>
+        <Button
+          variant="ghost"
+          size="lg"
+          className="flex-1"
+          onClick={orderAgain}
+          disabled={!order.items.some((i) => i.productId)}
+        >
           Order again
         </Button>
       </div>
@@ -334,7 +444,11 @@ function groupByMerchant(order: PublicOrder): Group[] {
       key,
       merchantName: item.merchantNameSnapshot || "Merchant",
       items: [],
-      fulfillment: order.fulfillments.find((f) => (item.merchantId ? f.merchantId === item.merchantId : f.merchantNameSnapshot === item.merchantNameSnapshot)),
+      fulfillment: order.fulfillments.find((f) =>
+        item.merchantId
+          ? f.merchantId === item.merchantId
+          : f.merchantNameSnapshot === item.merchantNameSnapshot,
+      ),
     };
     g.items.push(item);
     map.set(key, g);
@@ -342,14 +456,21 @@ function groupByMerchant(order: PublicOrder): Group[] {
   return [...map.values()];
 }
 
-function discountLines(items: OrderItem[], offerTitles: Record<string, string>): Array<{ key: string; label: string; cents: number }> {
+function discountLines(
+  items: OrderItem[],
+  offerTitles: Record<string, string>,
+): Array<{ key: string; label: string; cents: number }> {
   const map = new Map<string, number>();
   for (const i of items) {
     if (i.discountCents <= 0) continue;
     const k = i.offerId ?? "other";
     map.set(k, (map.get(k) ?? 0) + i.discountCents);
   }
-  return [...map.entries()].map(([key, cents]) => ({ key, label: (key !== "other" && offerTitles[key]) || "Discount", cents }));
+  return [...map.entries()].map(([key, cents]) => ({
+    key,
+    label: (key !== "other" && offerTitles[key]) || "Discount",
+    cents,
+  }));
 }
 
 function MerchantCard({ group, currency }: { group: Group; currency: PublicOrder["currency"] }) {
@@ -358,19 +479,38 @@ function MerchantCard({ group, currency }: { group: Group; currency: PublicOrder
     <section className="sign p-5" aria-label={`${group.merchantName} order`}>
       <header className="flex items-start justify-between gap-3">
         <h2 className="font-display text-lg font-semibold tracking-tight">{group.merchantName}</h2>
-        {f ? <Badge tone={f.status === "delivered" ? "mint" : f.status === "cancelled" || f.status === "failed" ? "danger" : "neutral"}>{TYPE_NAME[f.type]}</Badge> : null}
+        {f ? (
+          <Badge
+            tone={
+              f.status === "delivered"
+                ? "mint"
+                : f.status === "cancelled" || f.status === "failed"
+                  ? "danger"
+                  : "neutral"
+            }
+          >
+            {TYPE_NAME[f.type]}
+          </Badge>
+        ) : null}
       </header>
 
       <ul className="mt-3 divide-y divide-line">
         {group.items.map((item) => (
           <li key={item.id} className="flex items-center gap-3 py-2.5">
-            <ProductImage src={item.imageUrlSnapshot} alt="" label={item.titleSnapshot} className="h-12 w-12 shrink-0 rounded-lg" />
+            <ProductImage
+              src={item.imageUrlSnapshot}
+              alt=""
+              label={item.titleSnapshot}
+              className="h-12 w-12 shrink-0 rounded-lg"
+            />
             <div className="min-w-0 flex-1">
               <p className="truncate text-[15px] font-medium">
                 {item.quantity > 1 ? `${item.quantity} × ` : ""}
                 {item.titleSnapshot}
               </p>
-              {item.variantLabel ? <p className="truncate text-sm text-fog-3">{item.variantLabel}</p> : null}
+              {item.variantLabel ? (
+                <p className="truncate text-sm text-fog-3">{item.variantLabel}</p>
+              ) : null}
             </div>
             <span className={cn("tabular shrink-0 text-sm", item.discountCents > 0 && "text-mint")}>
               {formatCents(item.unitPriceCents * item.quantity - item.discountCents, currency)}
@@ -379,7 +519,11 @@ function MerchantCard({ group, currency }: { group: Group; currency: PublicOrder
         ))}
       </ul>
 
-      {f ? <Timeline fulfillment={f} /> : <p className="mt-3 text-sm text-fog-3">Fulfillment starts once payment is confirmed.</p>}
+      {f ? (
+        <Timeline fulfillment={f} />
+      ) : (
+        <p className="mt-3 text-sm text-fog-3">Fulfillment starts once payment is confirmed.</p>
+      )}
     </section>
   );
 }
@@ -387,7 +531,13 @@ function MerchantCard({ group, currency }: { group: Group; currency: PublicOrder
 function Timeline({ fulfillment: f }: { fulfillment: OrderFulfillment }) {
   const steps = STEPS[f.type];
   const failed = f.status === "cancelled" || f.status === "failed";
-  const currentIndex = failed ? steps.findIndex((s) => s.status === f.events.filter((e) => e.status !== "cancelled" && e.status !== "failed").at(-1)?.status) : steps.findIndex((s) => s.status === f.status);
+  const currentIndex = failed
+    ? steps.findIndex(
+        (s) =>
+          s.status ===
+          f.events.filter((e) => e.status !== "cancelled" && e.status !== "failed").at(-1)?.status,
+      )
+    : steps.findIndex((s) => s.status === f.status);
   const at = (status: FulfillmentStatus) => f.events.find((e) => e.status === status)?.at;
   const note = f.events.at(-1)?.note;
 
@@ -404,12 +554,24 @@ function Timeline({ fulfillment: f }: { fulfillment: OrderFulfillment }) {
                 aria-hidden="true"
                 className={cn(
                   "absolute top-1 -left-[26px] flex h-3 w-3 items-center justify-center rounded-full border",
-                  done ? "border-mint bg-mint" : current ? "border-signal bg-signal shadow-glow-signal" : "border-line bg-ink",
+                  done
+                    ? "border-mint bg-mint"
+                    : current
+                      ? "border-signal bg-signal shadow-glow-signal"
+                      : "border-line bg-ink",
                 )}
               />
               <div className="flex items-baseline justify-between gap-3">
-                <span className={cn(done ? "text-fog" : current ? "font-medium text-fog" : "text-fog-3")}>{step.label}</span>
-                {time ? <span className="tabular shrink-0 text-xs text-fog-3">{fmtTime(time)}</span> : null}
+                <span
+                  className={cn(
+                    done ? "text-fog" : current ? "font-medium text-fog" : "text-fog-3",
+                  )}
+                >
+                  {step.label}
+                </span>
+                {time ? (
+                  <span className="tabular shrink-0 text-xs text-fog-3">{fmtTime(time)}</span>
+                ) : null}
               </div>
               {current && note ? <p className="mt-0.5 text-xs text-fog-2">{note}</p> : null}
             </li>
@@ -417,15 +579,25 @@ function Timeline({ fulfillment: f }: { fulfillment: OrderFulfillment }) {
         })}
         {failed ? (
           <li className="relative text-sm">
-            <span aria-hidden="true" className="absolute top-1 -left-[26px] h-3 w-3 rounded-full border border-danger bg-danger" />
+            <span
+              aria-hidden="true"
+              className="absolute top-1 -left-[26px] h-3 w-3 rounded-full border border-danger bg-danger"
+            />
             <span className="text-danger">{f.status === "cancelled" ? "Cancelled" : "Failed"}</span>
           </li>
         ) : null}
       </ol>
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-        {f.etaAt && !TERMINAL.has(f.status) ? <p className="text-fog-2">Expected {fmtEta(f.etaAt)}</p> : null}
+        {f.etaAt && !TERMINAL.has(f.status) ? (
+          <p className="text-fog-2">Expected {fmtEta(f.etaAt)}</p>
+        ) : null}
         {f.trackingUrl ? (
-          <a href={f.trackingUrl} className="inline-flex min-h-11 items-center gap-1 text-sky underline-offset-4 hover:underline" target={f.trackingUrl.startsWith("/") ? undefined : "_blank"} rel="noreferrer">
+          <a
+            href={f.trackingUrl}
+            className="inline-flex min-h-11 items-center gap-1 text-sky underline-offset-4 hover:underline"
+            target={f.trackingUrl.startsWith("/") ? undefined : "_blank"}
+            rel="noreferrer"
+          >
             Track shipment <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
           </a>
         ) : null}
@@ -439,9 +611,25 @@ function Timeline({ fulfillment: f }: { fulfillment: OrderFulfillment }) {
   );
 }
 
-function Row({ label, value, tone, strong }: { label: string; value: string; tone?: "mint"; strong?: boolean }) {
+function Row({
+  label,
+  value,
+  tone,
+  strong,
+}: {
+  label: string;
+  value: string;
+  tone?: "mint";
+  strong?: boolean;
+}) {
   return (
-    <div className={cn("flex items-baseline justify-between gap-3", tone === "mint" && "text-mint", strong && "border-t border-line pt-2 text-base font-semibold")}>
+    <div
+      className={cn(
+        "flex items-baseline justify-between gap-3",
+        tone === "mint" && "text-mint",
+        strong && "border-t border-line pt-2 text-base font-semibold",
+      )}
+    >
       <dt className={cn("min-w-0 truncate", !strong && !tone && "text-fog-2")}>{label}</dt>
       <dd className="tabular shrink-0">{value}</dd>
     </div>

@@ -32,8 +32,13 @@ export default async function OrderPage({
   if (!authorizeOrderAccess(order, { userId: user?.id, token })) notFound();
 
   const fresh = await refreshOrderStatus(order, new Date(), ds);
-  const rewardIds = [...new Set(fresh.items.map((i) => i.digitalRewardId).filter((r): r is string => Boolean(r)))];
-  const [rewards, offers] = await Promise.all([rewardIds.length ? ds.getRewards(rewardIds) : Promise.resolve([] as DigitalReward[]), ds.listOffers()]);
+  const rewardIds = [
+    ...new Set(fresh.items.map((i) => i.digitalRewardId).filter((r): r is string => Boolean(r))),
+  ];
+  const [rewards, offers] = await Promise.all([
+    rewardIds.length ? ds.getRewards(rewardIds) : Promise.resolve([] as DigitalReward[]),
+    ds.listOffers(),
+  ]);
 
   return (
     <main className="mx-auto w-full max-w-2xl px-4 py-8 sm:py-12">

@@ -28,7 +28,9 @@ export async function createStripeCheckoutSession(input: {
   const currency = order.currency.toLowerCase();
 
   const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = order.items.map((item) => {
-    const name = item.variantLabel ? `${item.titleSnapshot} (${item.variantLabel})` : item.titleSnapshot;
+    const name = item.variantLabel
+      ? `${item.titleSnapshot} (${item.variantLabel})`
+      : item.titleSnapshot;
     const images = item.imageUrlSnapshot?.startsWith("https://") ? [item.imageUrlSnapshot] : [];
     return {
       quantity: item.quantity,
@@ -50,7 +52,9 @@ export async function createStripeCheckoutSession(input: {
       price_data: {
         currency,
         unit_amount: f.feeCents,
-        product_data: { name: `${feeLabel(f.type)} — ${f.merchantNameSnapshot}`.slice(0, MAX_NAME) },
+        product_data: {
+          name: `${feeLabel(f.type)} — ${f.merchantNameSnapshot}`.slice(0, MAX_NAME),
+        },
       },
     });
   }
@@ -61,7 +65,10 @@ export async function createStripeCheckoutSession(input: {
       amount_off: order.discountCents,
       currency,
       duration: "once",
-      name: (totals.appliedOffers.map((o) => o.title).join(", ") || "Discount").slice(0, MAX_COUPON_NAME),
+      name: (totals.appliedOffers.map((o) => o.title).join(", ") || "Discount").slice(
+        0,
+        MAX_COUPON_NAME,
+      ),
       metadata: { orderId: order.id },
     });
     discounts.push({ coupon: coupon.id });

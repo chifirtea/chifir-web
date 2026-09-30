@@ -26,7 +26,10 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
 
   try {
     const fresh = await refreshOrderStatus(order, new Date(), ds);
-    return NextResponse.json<OrderResponse>({ order: publicOrder(fresh) }, { headers: { "cache-control": "no-store" } });
+    return NextResponse.json<OrderResponse>(
+      { order: publicOrder(fresh) },
+      { headers: { "cache-control": "no-store" } },
+    );
   } catch (err) {
     console.error("[api/orders]", err);
     return jsonError(500, "Could not load this order right now.");

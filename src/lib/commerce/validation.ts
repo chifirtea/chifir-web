@@ -4,7 +4,11 @@ import { z } from "zod";
 export const orderTokenSchema = z.string().regex(/^[a-f0-9]{64}$/, "Invalid token");
 
 /** Order ids are uuids (Supabase) or `ord_<uuid>` (static mode). */
-export const orderIdSchema = z.string().min(1).max(64).regex(/^[A-Za-z0-9_-]+$/);
+export const orderIdSchema = z
+  .string()
+  .min(1)
+  .max(64)
+  .regex(/^[A-Za-z0-9_-]+$/);
 
 export const demoPaymentSchema = z.object({
   orderId: orderIdSchema,

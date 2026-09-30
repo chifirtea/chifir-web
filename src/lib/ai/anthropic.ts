@@ -36,7 +36,7 @@ type BetaMessageParam = Anthropic.Beta.BetaMessageParam;
 type BetaTool = Anthropic.Beta.BetaTool;
 type BetaToolResultBlockParam = Anthropic.Beta.BetaToolResultBlockParam;
 type BetaToolUseBlock = Anthropic.Beta.BetaToolUseBlock;
-type BetaStreamParams = Anthropic.Beta.Messages.BetaMessageStreamParams;
+type BetaStreamParams = Parameters<Anthropic["beta"]["messages"]["stream"]>[0];
 
 /** The slice of the SDK client the provider needs; tests inject a fake. */
 export interface StreamHandle {

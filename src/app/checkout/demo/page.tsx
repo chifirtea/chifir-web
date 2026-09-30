@@ -21,7 +21,13 @@ export default async function DemoCheckoutPage({
 }) {
   if (!features.demoPayments) notFound();
   const { order: orderId, t } = await searchParams;
-  if (!orderId || !t || !orderIdSchema.safeParse(orderId).success || !orderTokenSchema.safeParse(t).success) notFound();
+  if (
+    !orderId ||
+    !t ||
+    !orderIdSchema.safeParse(orderId).success ||
+    !orderTokenSchema.safeParse(t).success
+  )
+    notFound();
 
   const order = await getDataSource().getOrder(orderId);
   if (!order || !authorizeOrderAccess(order, { token: t })) notFound();
@@ -35,7 +41,8 @@ export default async function DemoCheckoutPage({
         <p className="eyebrow mb-2">Checkout</p>
         <h1 className="font-display text-3xl font-semibold tracking-tight">Almost yours</h1>
         <p className="mt-1 text-fog-2">
-          {order.items.length} {order.items.length === 1 ? "item" : "items"} from {merchants.join(" and ") || "the city"}.
+          {order.items.length} {order.items.length === 1 ? "item" : "items"} from{" "}
+          {merchants.join(" and ") || "the city"}.
         </p>
       </header>
 
@@ -53,7 +60,12 @@ export default async function DemoCheckoutPage({
                   {item.variantLabel ? ` · ${item.variantLabel}` : ""}
                 </p>
               </div>
-              <span className="tabular shrink-0">{formatCents(item.unitPriceCents * item.quantity - item.discountCents, order.currency)}</span>
+              <span className="tabular shrink-0">
+                {formatCents(
+                  item.unitPriceCents * item.quantity - item.discountCents,
+                  order.currency,
+                )}
+              </span>
             </li>
           ))}
         </ul>
@@ -85,10 +97,18 @@ export default async function DemoCheckoutPage({
         </dl>
       </section>
 
-      <DemoPayment orderId={order.id} token={t} totalCents={order.totalCents} currency={order.currency} />
+      <DemoPayment
+        orderId={order.id}
+        token={t}
+        totalCents={order.totalCents}
+        currency={order.currency}
+      />
 
       <p className="text-center text-sm">
-        <Link href="/city?checkout=cancelled" className="text-fog-3 underline-offset-4 hover:text-fog hover:underline">
+        <Link
+          href="/city?checkout=cancelled"
+          className="text-fog-3 underline-offset-4 hover:text-fog hover:underline"
+        >
           Back to the city without paying
         </Link>
       </p>

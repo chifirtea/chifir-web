@@ -20,14 +20,22 @@ export interface ProductListProps {
  */
 export function ProductList({ merchantId, onSelect, className, limit }: ProductListProps) {
   const index = useCityStore((s) => s.index);
-  if (!index) return <p className={cn("px-1 py-3 text-sm text-fog-3", className)}>Loading the menu…</p>;
+  if (!index)
+    return <p className={cn("px-1 py-3 text-sm text-fog-3", className)}>Loading the menu…</p>;
   const merchant = index.merchantsById[merchantId];
   const products = (index.productsByMerchant[merchantId] ?? []).slice(0, limit ?? Infinity);
   if (products.length === 0) {
-    return <p className={cn("px-1 py-3 text-sm text-fog-3", className)}>Nothing on the shelves right now.</p>;
+    return (
+      <p className={cn("px-1 py-3 text-sm text-fog-3", className)}>
+        Nothing on the shelves right now.
+      </p>
+    );
   }
   return (
-    <ul className={cn("divide-y divide-line", className)} aria-label={merchant ? `${merchant.name} menu` : "Menu"}>
+    <ul
+      className={cn("divide-y divide-line", className)}
+      aria-label={merchant ? `${merchant.name} menu` : "Menu"}
+    >
       {products.map((p) => {
         const note = inventoryNote(p.inventoryStatus, p.inventoryCount);
         const soldOut = p.inventoryStatus === "out_of_stock";
@@ -41,11 +49,22 @@ export function ProductList({ merchantId, onSelect, className, limit }: ProductL
                 soldOut && "opacity-60",
               )}
             >
-              <ProductImage src={p.imageUrl} alt="" label={p.title} brand={merchant?.brand} className="h-12 w-12 shrink-0 rounded-lg" />
+              <ProductImage
+                src={p.imageUrl}
+                alt=""
+                label={p.title}
+                brand={merchant?.brand}
+                className="h-12 w-12 shrink-0 rounded-lg"
+              />
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline justify-between gap-3">
                   <p className="min-w-0 truncate text-[15px] font-medium">{p.title}</p>
-                  <Price cents={p.priceCents} currency={p.currency} compareAtCents={p.compareAtPriceCents} className="shrink-0 text-sm" />
+                  <Price
+                    cents={p.priceCents}
+                    currency={p.currency}
+                    compareAtCents={p.compareAtPriceCents}
+                    className="shrink-0 text-sm"
+                  />
                 </div>
                 <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
                   {p.attributes.spiceLevel ? <SpiceFlames level={p.attributes.spiceLevel} /> : null}

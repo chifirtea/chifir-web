@@ -28,7 +28,13 @@ const HALL = sid.merchant("the-hall");
 const TICKET = sid.product("the-hall", "friday-live-set-ga");
 const DATE5 = sid.offer("bloom-date-night-5-off");
 
-const address = { line1: "1 Main St", city: "Austin", region: "TX", postalCode: "78701", country: "US" };
+const address = {
+  line1: "1 Main St",
+  city: "Austin",
+  region: "TX",
+  postalCode: "78701",
+  country: "US",
+};
 const contact = { email: "sam@example.com", name: "Sam" };
 
 function body(raw: Record<string, unknown>): CheckoutRequestInput {
@@ -57,7 +63,10 @@ beforeEach(() => {
 describe("createCheckoutOrder", () => {
   it("prices the order with computeTotals and snapshots every line", async () => {
     const input = mixedCart();
-    const { order, totals, accessToken } = await createCheckoutOrder({ body: input, paymentProvider: "demo" }, ds);
+    const { order, totals, accessToken } = await createCheckoutOrder(
+      { body: input, paymentProvider: "demo" },
+      ds,
+    );
 
     const products = await ds.getProducts([BOUQUET, HOODIE]);
     const merchants = await ds.listMerchants();
@@ -119,7 +128,12 @@ describe("createCheckoutOrder", () => {
       deliveryAddress: address,
       events: [],
     });
-    expect(north).toMatchObject({ type: "shipping", feeCents: 0, subtotalCents: 12800, deliveryAddress: address });
+    expect(north).toMatchObject({
+      type: "shipping",
+      feeCents: 0,
+      subtotalCents: 12800,
+      deliveryAddress: address,
+    });
   });
 
   it("applies a promo code through computeTotals and records the discount on the order", async () => {
@@ -188,7 +202,13 @@ describe("createCheckoutOrder", () => {
 describe("payment and completion", () => {
   it("is idempotent: markOrderPaid transitions once, so completeOrder runs once", async () => {
     const { order } = await createCheckoutOrder(
-      { body: body({ lines: [{ productId: BOUQUET, quantity: 1 }], fulfillment: [{ merchantId: BLOOM, type: "pickup" }], promoCode: "DATE5" }) },
+      {
+        body: body({
+          lines: [{ productId: BOUQUET, quantity: 1 }],
+          fulfillment: [{ merchantId: BLOOM, type: "pickup" }],
+          promoCode: "DATE5",
+        }),
+      },
       ds,
     );
     const before = (await ds.listOffers()).find((o) => o.id === DATE5)!.redemptionsCount;
@@ -210,10 +230,16 @@ describe("payment and completion", () => {
 
   it("does not grant rewards or XP to guests, but does for signed-in buyers (idempotently)", async () => {
     const cart = () =>
-      body({ lines: [{ productId: BOUQUET, quantity: 1 }], fulfillment: [{ merchantId: BLOOM, type: "pickup" }] });
+      body({
+        lines: [{ productId: BOUQUET, quantity: 1 }],
+        fulfillment: [{ merchantId: BLOOM, type: "pickup" }],
+      });
 
     const guest = await createCheckoutOrder({ body: cart() }, ds);
-    await completeOrder((await ds.markOrderPaid(guest.order.id, { paidAt: new Date().toISOString() }))!, ds);
+    await completeOrder(
+      (await ds.markOrderPaid(guest.order.id, { paidAt: new Date().toISOString() }))!,
+      ds,
+    );
     expect(await ds.listUserRewards("u1")).toEqual([]);
 
     const member = await createCheckoutOrder({ body: cart(), userId: "u1" }, ds);
@@ -233,7 +259,13 @@ describe("payment and completion", () => {
 
   it("never grants for an unpaid order", async () => {
     const { order } = await createCheckoutOrder(
-      { body: body({ lines: [{ productId: BOUQUET, quantity: 1 }], fulfillment: [{ merchantId: BLOOM, type: "pickup" }] }), userId: "u2" },
+      {
+        body: body({
+          lines: [{ productId: BOUQUET, quantity: 1 }],
+          fulfillment: [{ merchantId: BLOOM, type: "pickup" }],
+        }),
+        userId: "u2",
+      },
       ds,
     );
     await grantOrderRewards(order, "u2", ds);
@@ -252,9 +284,13 @@ describe("payment and completion", () => {
     expect(midway.status).toBe("in_fulfillment");
     expect(midway.fulfillments.find((f) => f.type === "delivery")?.status).toBe("out_for_delivery");
     expect(midway.fulfillments.find((f) => f.type === "shipping")?.status).toBe("shipped");
-    expect(midway.fulfillments.find((f) => f.type === "shipping")?.trackingUrl).toBe(`/orders/${order.id}`);
+    expect(midway.fulfillments.find((f) => f.type === "shipping")?.trackingUrl).toBe(
+      `/orders/${order.id}`,
+    );
     // Persisted, not just returned.
-    expect((await ds.getOrder(order.id))?.fulfillments.find((f) => f.type === "delivery")?.status).toBe("out_for_delivery");
+    expect(
+      (await ds.getOrder(order.id))?.fulfillments.find((f) => f.type === "delivery")?.status,
+    ).toBe("out_for_delivery");
 
     const done = await refreshOrderStatus(midway, new Date(acceptedAt + 1_000_000), ds);
     expect(done.status).toBe("completed");
@@ -264,7 +300,12 @@ describe("payment and completion", () => {
 
   it("completes ticket orders immediately", async () => {
     const { order, totals } = await createCheckoutOrder(
-      { body: body({ lines: [{ productId: TICKET, quantity: 2 }], fulfillment: [{ merchantId: HALL, type: "ticket" }] }) },
+      {
+        body: body({
+          lines: [{ productId: TICKET, quantity: 2 }],
+          fulfillment: [{ merchantId: HALL, type: "ticket" }],
+        }),
+      },
       ds,
     );
     expect(totals.totalCents).toBe(5000);
@@ -283,13 +324,18 @@ describe("payment and completion", () => {
 
 describe("access", () => {
   it("authorizes the owner or the token bearer, and strips the hash from public orders", async () => {
-    const { order, accessToken } = await createCheckoutOrder({ body: mixedCart(), userId: "owner" }, ds);
+    const { order, accessToken } = await createCheckoutOrder(
+      { body: mixedCart(), userId: "owner" },
+      ds,
+    );
     expect(authorizeOrderAccess(order, { token: accessToken })).toBe(true);
     expect(authorizeOrderAccess(order, { userId: "owner" })).toBe(true);
     expect(authorizeOrderAccess(order, { userId: "someone-else" })).toBe(false);
     expect(authorizeOrderAccess(order, { token: "f".repeat(64) })).toBe(false);
     expect(authorizeOrderAccess(order, {})).toBe(false);
-    expect(authorizeOrderAccess({ status: "paid" } as never, { userId: "owner", token: accessToken })).toBe(false);
+    expect(
+      authorizeOrderAccess({ status: "paid" } as never, { userId: "owner", token: accessToken }),
+    ).toBe(false);
 
     const pub = publicOrder(order);
     expect("accessTokenHash" in pub).toBe(false);
@@ -299,11 +345,16 @@ describe("access", () => {
 
   it("claims guest orders by token hash and then grants rewards", async () => {
     const { order, accessToken } = await createCheckoutOrder({ body: mixedCart() }, ds);
-    await completeOrder((await ds.markOrderPaid(order.id, { paidAt: new Date().toISOString() }))!, ds);
+    await completeOrder(
+      (await ds.markOrderPaid(order.id, { paidAt: new Date().toISOString() }))!,
+      ds,
+    );
     expect(await ds.claimOrder(order.id, sha256("nope"), "u3")).toBe(false);
     expect(await ds.claimOrder(order.id, sha256(accessToken), "u3")).toBe(true);
     await grantOrderRewards((await ds.getOrder(order.id))!, "u3", ds);
-    expect((await ds.listUserRewards("u3")).map((r) => r.rewardId).sort()).toEqual([BOUQUET_REWARD, HOODIE_REWARD].sort());
+    expect((await ds.listUserRewards("u3")).map((r) => r.rewardId).sort()).toEqual(
+      [BOUQUET_REWARD, HOODIE_REWARD].sort(),
+    );
     expect(await ds.claimOrder(order.id, sha256(accessToken), "u4")).toBe(false); // already owned
   });
 });

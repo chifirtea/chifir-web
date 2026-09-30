@@ -26,7 +26,15 @@ export function humanize(slug: string): string {
   return words ? words.charAt(0).toUpperCase() + words.slice(1) : "";
 }
 
-export function SpiceFlames({ level, showLabel = false, className }: { level: number; showLabel?: boolean; className?: string }) {
+export function SpiceFlames({
+  level,
+  showLabel = false,
+  className,
+}: {
+  level: number;
+  showLabel?: boolean;
+  className?: string;
+}) {
   if (level <= 0) return null;
   const n = Math.min(4, Math.max(1, Math.round(level)));
   return (
@@ -43,7 +51,13 @@ export function SpiceFlames({ level, showLabel = false, className }: { level: nu
   );
 }
 
-export function DietaryChips({ tags, compact = false }: { tags: DietaryTag[] | undefined; compact?: boolean }) {
+export function DietaryChips({
+  tags,
+  compact = false,
+}: {
+  tags: DietaryTag[] | undefined;
+  compact?: boolean;
+}) {
   if (!tags?.length) return null;
   const shown = compact ? tags.slice(0, 2) : tags;
   return (
@@ -53,13 +67,18 @@ export function DietaryChips({ tags, compact = false }: { tags: DietaryTag[] | u
           {DIETARY_LABEL[t]}
         </Badge>
       ))}
-      {compact && tags.length > shown.length ? <Badge tone="neutral">+{tags.length - shown.length}</Badge> : null}
+      {compact && tags.length > shown.length ? (
+        <Badge tone="neutral">+{tags.length - shown.length}</Badge>
+      ) : null}
     </>
   );
 }
 
 /** Real inventory state only; never invented scarcity. */
-export function inventoryNote(status: InventoryStatus, count?: number): { text: string; tone: "sodium" | "danger" | "neutral" } | null {
+export function inventoryNote(
+  status: InventoryStatus,
+  count?: number,
+): { text: string; tone: "sodium" | "danger" | "neutral" } | null {
   switch (status) {
     case "out_of_stock":
       return { text: "Sold out", tone: "danger" };

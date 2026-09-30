@@ -29,13 +29,23 @@ interface AddressForm {
   country: string;
 }
 const EMPTY_CONTACT: ContactForm = { email: "", name: "", phone: "" };
-const EMPTY_ADDRESS: AddressForm = { line1: "", line2: "", city: "", region: "", postalCode: "", country: "US" };
+const EMPTY_ADDRESS: AddressForm = {
+  line1: "",
+  line2: "",
+  city: "",
+  region: "",
+  postalCode: "",
+  country: "US",
+};
 
 function loadSaved(): { contact: ContactForm; address: AddressForm } | null {
   try {
     const raw = localStorage.getItem(CONTACT_STORAGE_KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<{ contact: Partial<ContactForm>; address: Partial<AddressForm> }>;
+    const parsed = JSON.parse(raw) as Partial<{
+      contact: Partial<ContactForm>;
+      address: Partial<AddressForm>;
+    }>;
     return {
       contact: { ...EMPTY_CONTACT, ...(parsed.contact ?? {}) },
       address: { ...EMPTY_ADDRESS, ...(parsed.address ?? {}) },
@@ -93,8 +103,18 @@ export function CheckoutSheet({ open, onClose, onBack }: CheckoutSheetProps) {
   const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact.email.trim());
   const addressOk =
     !needsAddress ||
-    (address.line1.trim() && address.city.trim() && address.region.trim() && address.postalCode.trim().length >= 2 && /^[A-Za-z]{2}$/.test(address.country.trim()));
-  const canPay = ready && lines.length > 0 && totals.problems.length === 0 && emailOk && Boolean(addressOk) && !submitting;
+    (address.line1.trim() &&
+      address.city.trim() &&
+      address.region.trim() &&
+      address.postalCode.trim().length >= 2 &&
+      /^[A-Za-z]{2}$/.test(address.country.trim()));
+  const canPay =
+    ready &&
+    lines.length > 0 &&
+    totals.problems.length === 0 &&
+    emailOk &&
+    Boolean(addressOk) &&
+    !submitting;
 
   const problemText = (p: CheckoutProblem): string => {
     const line = lines.find((l) => l.key === p.key);
@@ -149,7 +169,10 @@ export function CheckoutSheet({ open, onClose, onBack }: CheckoutSheetProps) {
       footer={
         <div className="space-y-2">
           {error ? (
-            <div role="alert" className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
+            <div
+              role="alert"
+              className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger"
+            >
               <p>{error}</p>
               {problems.length ? (
                 <ul className="mt-1 list-disc pl-4">
@@ -160,8 +183,17 @@ export function CheckoutSheet({ open, onClose, onBack }: CheckoutSheetProps) {
               ) : null}
             </div>
           ) : null}
-          <Button form={formId} type="submit" size="lg" className="w-full" disabled={!canPay} loading={submitting}>
-            {submitting ? "Starting checkout" : `Pay ${formatCents(totals.totalCents, totals.currency)}`}
+          <Button
+            form={formId}
+            type="submit"
+            size="lg"
+            className="w-full"
+            disabled={!canPay}
+            loading={submitting}
+          >
+            {submitting
+              ? "Starting checkout"
+              : `Pay ${formatCents(totals.totalCents, totals.currency)}`}
           </Button>
           <p className="text-center text-xs text-fog-3">You confirm payment on the next screen.</p>
         </div>
@@ -186,26 +218,91 @@ export function CheckoutSheet({ open, onClose, onBack }: CheckoutSheetProps) {
             required
             value={contact.email}
             onChange={(e) => setContact({ ...contact, email: e.target.value })}
-            error={touched && !emailOk ? "Enter the email for your receipt and order updates." : undefined}
+            error={
+              touched && !emailOk
+                ? "Enter the email for your receipt and order updates."
+                : undefined
+            }
           />
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Name" autoComplete="name" value={contact.name} onChange={(e) => setContact({ ...contact, name: e.target.value })} hint="optional" />
-            <Field label="Phone" type="tel" inputMode="tel" autoComplete="tel" value={contact.phone} onChange={(e) => setContact({ ...contact, phone: e.target.value })} hint="optional" />
+            <Field
+              label="Name"
+              autoComplete="name"
+              value={contact.name}
+              onChange={(e) => setContact({ ...contact, name: e.target.value })}
+              hint="optional"
+            />
+            <Field
+              label="Phone"
+              type="tel"
+              inputMode="tel"
+              autoComplete="tel"
+              value={contact.phone}
+              onChange={(e) => setContact({ ...contact, phone: e.target.value })}
+              hint="optional"
+            />
           </div>
         </section>
 
         {needsAddress ? (
           <section className="space-y-3">
             <h3 className="eyebrow">Delivery address</h3>
-            <Field label="Street" autoComplete="address-line1" required value={address.line1} onChange={(e) => setAddress({ ...address, line1: e.target.value })} error={touched && !address.line1.trim() ? "Required." : undefined} />
-            <Field label="Apt, suite, floor" autoComplete="address-line2" value={address.line2} onChange={(e) => setAddress({ ...address, line2: e.target.value })} hint="optional" />
+            <Field
+              label="Street"
+              autoComplete="address-line1"
+              required
+              value={address.line1}
+              onChange={(e) => setAddress({ ...address, line1: e.target.value })}
+              error={touched && !address.line1.trim() ? "Required." : undefined}
+            />
+            <Field
+              label="Apt, suite, floor"
+              autoComplete="address-line2"
+              value={address.line2}
+              onChange={(e) => setAddress({ ...address, line2: e.target.value })}
+              hint="optional"
+            />
             <div className="grid grid-cols-2 gap-3">
-              <Field label="City" autoComplete="address-level2" required value={address.city} onChange={(e) => setAddress({ ...address, city: e.target.value })} error={touched && !address.city.trim() ? "Required." : undefined} />
-              <Field label="State / region" autoComplete="address-level1" required value={address.region} onChange={(e) => setAddress({ ...address, region: e.target.value })} error={touched && !address.region.trim() ? "Required." : undefined} />
+              <Field
+                label="City"
+                autoComplete="address-level2"
+                required
+                value={address.city}
+                onChange={(e) => setAddress({ ...address, city: e.target.value })}
+                error={touched && !address.city.trim() ? "Required." : undefined}
+              />
+              <Field
+                label="State / region"
+                autoComplete="address-level1"
+                required
+                value={address.region}
+                onChange={(e) => setAddress({ ...address, region: e.target.value })}
+                error={touched && !address.region.trim() ? "Required." : undefined}
+              />
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Postal code" autoComplete="postal-code" required value={address.postalCode} onChange={(e) => setAddress({ ...address, postalCode: e.target.value })} error={touched && address.postalCode.trim().length < 2 ? "Required." : undefined} />
-              <Field label="Country" autoComplete="country" required maxLength={2} value={address.country} onChange={(e) => setAddress({ ...address, country: e.target.value.toUpperCase() })} hint="2-letter code" error={touched && !/^[A-Za-z]{2}$/.test(address.country.trim()) ? "Use a 2-letter code, like US." : undefined} />
+              <Field
+                label="Postal code"
+                autoComplete="postal-code"
+                required
+                value={address.postalCode}
+                onChange={(e) => setAddress({ ...address, postalCode: e.target.value })}
+                error={touched && address.postalCode.trim().length < 2 ? "Required." : undefined}
+              />
+              <Field
+                label="Country"
+                autoComplete="country"
+                required
+                maxLength={2}
+                value={address.country}
+                onChange={(e) => setAddress({ ...address, country: e.target.value.toUpperCase() })}
+                hint="2-letter code"
+                error={
+                  touched && !/^[A-Za-z]{2}$/.test(address.country.trim())
+                    ? "Use a 2-letter code, like US."
+                    : undefined
+                }
+              />
             </div>
           </section>
         ) : null}
@@ -217,16 +314,26 @@ export function CheckoutSheet({ open, onClose, onBack }: CheckoutSheetProps) {
               const merchantTotals = totals.byMerchant.find((m) => m.merchantId === g.merchantId);
               const count = g.lines.reduce((n, l) => n + l.quantity, 0);
               return (
-                <li key={g.merchantId} className="flex items-start justify-between gap-3 px-3 py-2.5 text-sm">
+                <li
+                  key={g.merchantId}
+                  className="flex items-start justify-between gap-3 px-3 py-2.5 text-sm"
+                >
                   <div className="min-w-0">
                     <p className="truncate font-medium">{g.merchant?.name ?? "Unknown merchant"}</p>
                     <p className="text-fog-3">
                       {count} {count === 1 ? "item" : "items"}
-                      {g.type ? ` · ${fulfillmentOptionLabel(g.merchant, g.type, totals.currency).label}` : ""}
+                      {g.type
+                        ? ` · ${fulfillmentOptionLabel(g.merchant, g.type, totals.currency).label}`
+                        : ""}
                     </p>
                   </div>
                   <span className="tabular shrink-0">
-                    {formatCents((merchantTotals?.subtotalCents ?? 0) - (merchantTotals?.discountCents ?? 0) + (merchantTotals?.feeCents ?? 0), totals.currency)}
+                    {formatCents(
+                      (merchantTotals?.subtotalCents ?? 0) -
+                        (merchantTotals?.discountCents ?? 0) +
+                        (merchantTotals?.feeCents ?? 0),
+                      totals.currency,
+                    )}
                   </span>
                 </li>
               );
@@ -235,7 +342,12 @@ export function CheckoutSheet({ open, onClose, onBack }: CheckoutSheetProps) {
           <dl className="space-y-1 text-sm">
             <Row label="Subtotal" value={formatCents(totals.subtotalCents, totals.currency)} />
             {totals.appliedOffers.map((o) => (
-              <Row key={o.offerId} label={o.title} value={`-${formatCents(o.discountCents, totals.currency)}`} tone="mint" />
+              <Row
+                key={o.offerId}
+                label={o.title}
+                value={`-${formatCents(o.discountCents, totals.currency)}`}
+                tone="mint"
+              />
             ))}
             {totals.byMerchant
               .filter((m) => m.feeCents > 0)
@@ -254,9 +366,25 @@ export function CheckoutSheet({ open, onClose, onBack }: CheckoutSheetProps) {
   );
 }
 
-function Row({ label, value, tone, strong }: { label: string; value: string; tone?: "mint"; strong?: boolean }) {
+function Row({
+  label,
+  value,
+  tone,
+  strong,
+}: {
+  label: string;
+  value: string;
+  tone?: "mint";
+  strong?: boolean;
+}) {
   return (
-    <div className={cn("flex items-baseline justify-between gap-3", tone === "mint" && "text-mint", strong && "border-t border-line pt-2 text-base font-semibold")}>
+    <div
+      className={cn(
+        "flex items-baseline justify-between gap-3",
+        tone === "mint" && "text-mint",
+        strong && "border-t border-line pt-2 text-base font-semibold",
+      )}
+    >
       <dt className={cn("min-w-0 truncate", !strong && !tone && "text-fog-2")}>{label}</dt>
       <dd className="tabular shrink-0">{value}</dd>
     </div>

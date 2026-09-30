@@ -19,7 +19,10 @@ const merchant = {
 
 const order = { id: "ord_1", items: [] } as unknown as Order;
 
-const fulfillment = (type: OrderFulfillment["type"], extra: Partial<OrderFulfillment> = {}): OrderFulfillment => ({
+const fulfillment = (
+  type: OrderFulfillment["type"],
+  extra: Partial<OrderFulfillment> = {},
+): OrderFulfillment => ({
   id: `ful_${type}`,
   orderId: "ord_1",
   merchantId: "m1",
@@ -49,7 +52,9 @@ describe("SimulatedProvider.create", () => {
 
   it("uses pickup minutes and shipping days for ETAs, with defaults when the merchant is unknown", async () => {
     expect((await create("pickup")).etaAt).toBe(new Date(T0.getTime() + 20 * 60_000).toISOString());
-    expect((await create("shipping")).etaAt).toBe(new Date(T0.getTime() + 5 * 86_400_000).toISOString());
+    expect((await create("shipping")).etaAt).toBe(
+      new Date(T0.getTime() + 5 * 86_400_000).toISOString(),
+    );
     expect(estimateEta("delivery", null, T0).getTime()).toBe(T0.getTime() + 30 * 60_000);
     expect(estimateEta("shipping", null, T0).getTime()).toBe(T0.getTime() + 4 * 86_400_000);
   });
@@ -83,7 +88,13 @@ describe("SimulatedProvider.getStatus", () => {
 
     const done = await provider.getStatus(out, plus(400));
     expect(done.status).toBe("delivered");
-    expect(done.events.map((e) => e.status)).toEqual(["pending", "accepted", "preparing", "out_for_delivery", "delivered"]);
+    expect(done.events.map((e) => e.status)).toEqual([
+      "pending",
+      "accepted",
+      "preparing",
+      "out_for_delivery",
+      "delivered",
+    ]);
     expect(done.trackingUrl).toBeUndefined();
   });
 
@@ -91,7 +102,13 @@ describe("SimulatedProvider.getStatus", () => {
     const accepted = await create("delivery");
     const late = await provider.getStatus(accepted, plus(1000));
     expect(late.status).toBe("delivered");
-    expect(late.events.map((e) => e.status)).toEqual(["pending", "accepted", "preparing", "out_for_delivery", "delivered"]);
+    expect(late.events.map((e) => e.status)).toEqual([
+      "pending",
+      "accepted",
+      "preparing",
+      "out_for_delivery",
+      "delivered",
+    ]);
     const again = await provider.getStatus(late, plus(2000));
     expect(again).toBe(late);
   });
@@ -106,7 +123,13 @@ describe("SimulatedProvider.getStatus", () => {
     expect(shipped.trackingUrl).toBe("/orders/ord_1");
     const delivered = await provider.getStatus(shipped, plus(500));
     expect(delivered.status).toBe("delivered");
-    expect(delivered.events.map((e) => e.status)).toEqual(["pending", "accepted", "preparing", "shipped", "delivered"]);
+    expect(delivered.events.map((e) => e.status)).toEqual([
+      "pending",
+      "accepted",
+      "preparing",
+      "shipped",
+      "delivered",
+    ]);
   });
 
   it("uses ready for pickup", async () => {

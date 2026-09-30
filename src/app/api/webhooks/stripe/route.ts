@@ -26,7 +26,10 @@ export async function POST(req: NextRequest) {
   try {
     event = getStripe().webhooks.constructEvent(raw, signature, serverEnv.STRIPE_WEBHOOK_SECRET);
   } catch (err) {
-    console.warn("[webhooks/stripe] signature verification failed", err instanceof Error ? err.message : err);
+    console.warn(
+      "[webhooks/stripe] signature verification failed",
+      err instanceof Error ? err.message : err,
+    );
     return jsonError(400, "Invalid signature");
   }
 
@@ -53,9 +56,14 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ received: true });
 }
 
-async function resolveOrder(session: Stripe.Checkout.Session, ds: DataSource): Promise<Order | null> {
+async function resolveOrder(
+  session: Stripe.Checkout.Session,
+  ds: DataSource,
+): Promise<Order | null> {
   const orderId = session.metadata?.orderId ?? session.client_reference_id;
-  const order = orderId ? await ds.getOrder(orderId) : await ds.getOrderByCheckoutSession(session.id);
+  const order = orderId
+    ? await ds.getOrder(orderId)
+    : await ds.getOrderByCheckoutSession(session.id);
   if (!order) {
     console.warn(`[webhooks/stripe] no order for session ${session.id}`);
     return null;
@@ -74,9 +82,14 @@ async function handlePaid(session: Stripe.Checkout.Session, ds: DataSource): Pro
   const order = await resolveOrder(session, ds);
   if (!order) return;
   if (typeof session.amount_total === "number" && session.amount_total !== order.totalCents) {
-    console.error(`[webhooks/stripe] amount mismatch for order ${order.id}: stripe=${session.amount_total} order=${order.totalCents}`);
+    console.error(
+      `[webhooks/stripe] amount mismatch for order ${order.id}: stripe=${session.amount_total} order=${order.totalCents}`,
+    );
   }
-  const paymentIntentId = typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent?.id;
+  const paymentIntentId =
+    typeof session.payment_intent === "string"
+      ? session.payment_intent
+      : session.payment_intent?.id;
   const paid = await ds.markOrderPaid(order.id, {
     ...(paymentIntentId ? { stripePaymentIntentId: paymentIntentId } : {}),
     paidAt: new Date().toISOString(),
@@ -85,7 +98,11 @@ async function handlePaid(session: Stripe.Checkout.Session, ds: DataSource): Pro
   await completeOrder(paid, ds);
 }
 
-async function handleClosed(session: Stripe.Checkout.Session, status: Extract<OrderStatus, "cancelled" | "payment_failed">, ds: DataSource): Promise<void> {
+async function handleClosed(
+  session: Stripe.Checkout.Session,
+  status: Extract<OrderStatus, "cancelled" | "payment_failed">,
+  ds: DataSource,
+): Promise<void> {
   const order = await resolveOrder(session, ds);
   if (!order || order.status !== "pending_payment") return;
   await ds.updateOrder(order.id, { status });

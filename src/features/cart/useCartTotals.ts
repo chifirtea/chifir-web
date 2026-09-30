@@ -1,11 +1,23 @@
 "use client";
 
 import { useMemo } from "react";
-import type { CartLine, FulfillmentSelection, FulfillmentType, Merchant, Offer, Product } from "@/types/domain";
+import type {
+  CartLine,
+  FulfillmentSelection,
+  FulfillmentType,
+  Merchant,
+  Offer,
+  Product,
+} from "@/types/domain";
 import { useCityStore } from "@/city/cityStore";
 import { useCartStore } from "./cartStore";
 import { useFulfillmentStore } from "./fulfillmentStore";
-import { availableFulfillmentTypes, computeTotals, defaultFulfillmentFor, type CartTotals } from "./pricing";
+import {
+  availableFulfillmentTypes,
+  computeTotals,
+  defaultFulfillmentFor,
+  type CartTotals,
+} from "./pricing";
 
 export interface MerchantGroup {
   merchantId: string;
@@ -64,10 +76,15 @@ export function useCartTotals(): CartTotalsView {
     const linesByMerchant: MerchantGroup[] = order.map((merchantId) => {
       const groupLines = byMerchant.get(merchantId)!;
       const merchant = merchantsById[merchantId];
-      const products = groupLines.map((l) => productsById[l.productId]).filter((p): p is Product => Boolean(p));
+      const products = groupLines
+        .map((l) => productsById[l.productId])
+        .filter((p): p is Product => Boolean(p));
       const availableTypes = availableFulfillmentTypes(merchant, products);
       const chosen = stored[merchantId];
-      const type = chosen && availableTypes.includes(chosen) ? chosen : defaultFulfillmentFor(merchant, products);
+      const type =
+        chosen && availableTypes.includes(chosen)
+          ? chosen
+          : defaultFulfillmentFor(merchant, products);
       if (type) selection[merchantId] = type;
       return { merchantId, merchant, lines: groupLines, products, availableTypes, type };
     });

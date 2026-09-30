@@ -53,7 +53,7 @@ export function ConciergeDrawer() {
         onCancel={chat.cancel}
         assistantName="Concierge"
         placeholder="Ask the city…"
-        emptyState={<p>Hungry, shopping, or just curious what's on? Ask, and I'll point you to real places you can walk into.</p>}
+        emptyState={<p>Hungry, shopping, or just curious what&apos;s on? Ask, and I&apos;ll point you to real places you can walk into.</p>}
       />
     </Drawer>
   );

@@ -82,7 +82,11 @@ export function fulfillmentOptionLabel(
 }
 
 /** Sentence form for product panels: "Delivery in 25–40 min · $3.99", "Ships in 3–5 days · free". */
-export function fulfillmentEtaLine(merchant: Merchant | undefined, type: FulfillmentType, currency: CurrencyCode = "USD"): string {
+export function fulfillmentEtaLine(
+  merchant: Merchant | undefined,
+  type: FulfillmentType,
+  currency: CurrencyCode = "USD",
+): string {
   const f = merchant?.fulfillment;
   const { feeCents } = merchantFulfillment(merchant, type);
   switch (type) {

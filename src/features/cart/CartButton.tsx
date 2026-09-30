@@ -8,7 +8,12 @@ import { selectCartCount, useCartStore } from "./cartStore";
 
 const noop = () => () => {};
 /** True only after hydration, so the persisted count never mismatches server HTML. */
-const useMounted = () => useSyncExternalStore(noop, () => true, () => false);
+const useMounted = () =>
+  useSyncExternalStore(
+    noop,
+    () => true,
+    () => false,
+  );
 
 /** HUD cart button: bag icon, count badge, a short pulse whenever something is added. */
 export function CartButton({ className }: { className?: string }) {

@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState, type FormEvent } from "react";
 import { ShoppingBag, Tag, X } from "lucide-react";
-import type { CartLine, FulfillmentType, Merchant, Product } from "@/types/domain";
+import type { CartLine, Merchant, Product } from "@/types/domain";
 import { Button, Drawer, ProductImage } from "@/components/ui";
 import { cn } from "@/lib/utils/cn";
 import { formatCents } from "@/lib/utils/money";
@@ -40,7 +40,9 @@ export function CartDrawer() {
 
   const empty = linesByMerchant.length === 0;
   const canCheckout = ready && !empty && totals.problems.length === 0 && totals.lines.length > 0;
-  const title = empty ? "Your cart" : `${totals.itemCount} ${totals.itemCount === 1 ? "item" : "items"}`;
+  const title = empty
+    ? "Your cart"
+    : `${totals.itemCount} ${totals.itemCount === 1 ? "item" : "items"}`;
 
   return (
     <>
@@ -54,11 +56,22 @@ export function CartDrawer() {
           empty ? undefined : (
             <div className="space-y-2">
               {totals.problems.length > 0 ? (
-                <p className="text-center text-sm text-danger">Fix the items marked above to continue.</p>
+                <p className="text-center text-sm text-danger">
+                  Fix the items marked above to continue.
+                </p>
               ) : null}
-              <Button size="lg" className="w-full" disabled={!canCheckout} onClick={() => setCheckoutOpen(true)}>
+              <Button
+                size="lg"
+                className="w-full"
+                disabled={!canCheckout}
+                onClick={() => setCheckoutOpen(true)}
+              >
                 Get it IRL
-                {canCheckout ? <span className="tabular font-normal opacity-80">· {formatCents(totals.totalCents, totals.currency)}</span> : null}
+                {canCheckout ? (
+                  <span className="tabular font-normal opacity-80">
+                    · {formatCents(totals.totalCents, totals.currency)}
+                  </span>
+                ) : null}
               </Button>
             </div>
           )
@@ -100,7 +113,9 @@ function EmptyCart({ onConcierge }: { onConcierge: () => void }) {
       <span className="flex h-16 w-16 items-center justify-center rounded-full border border-line bg-ink-2 text-fog-3">
         <ShoppingBag className="h-7 w-7" aria-hidden="true" />
       </span>
-      <p className="max-w-[26ch] text-fog-2">Your cart is empty. Walk into a store or ask the concierge.</p>
+      <p className="max-w-[26ch] text-fog-2">
+        Your cart is empty. Walk into a store or ask the concierge.
+      </p>
       <Button variant="secondary" onClick={onConcierge}>
         Ask the concierge
       </Button>
@@ -108,7 +123,13 @@ function EmptyCart({ onConcierge }: { onConcierge: () => void }) {
   );
 }
 
-function MerchantSection({ group, view }: { group: MerchantGroup; view: ReturnType<typeof useCartTotals> }) {
+function MerchantSection({
+  group,
+  view,
+}: {
+  group: MerchantGroup;
+  view: ReturnType<typeof useCartTotals>;
+}) {
   const setType = useFulfillmentStore((s) => s.setType);
   const { totals } = view;
   const merchant = group.merchant;
@@ -126,7 +147,11 @@ function MerchantSection({ group, view }: { group: MerchantGroup; view: ReturnTy
       </header>
 
       {group.availableTypes.length > 0 ? (
-        <div role="radiogroup" aria-label={`How to get your ${merchant?.name ?? ""} order`} className="flex flex-wrap gap-1.5">
+        <div
+          role="radiogroup"
+          aria-label={`How to get your ${merchant?.name ?? ""} order`}
+          className="flex flex-wrap gap-1.5"
+        >
           {group.availableTypes.map((type) => {
             const selected = group.type === type;
             const { label } = fulfillmentOptionLabel(merchant, type, totals.currency);
@@ -139,7 +164,9 @@ function MerchantSection({ group, view }: { group: MerchantGroup; view: ReturnTy
                 onClick={() => setType(group.merchantId, type)}
                 className={cn(
                   "min-h-11 rounded-lg border px-3 text-[13px] font-medium transition-colors",
-                  selected ? "border-signal bg-signal/12 text-fog" : "border-line text-fog-2 hover:bg-white/5 hover:text-fog",
+                  selected
+                    ? "border-signal bg-signal/12 text-fog"
+                    : "border-line text-fog-2 hover:bg-white/5 hover:text-fog",
                 )}
               >
                 {label}
@@ -149,13 +176,21 @@ function MerchantSection({ group, view }: { group: MerchantGroup; view: ReturnTy
         </div>
       ) : (
         <p className="text-sm text-danger">
-          {merchant ? `${merchant.name} cannot fulfil these items together. Remove one to continue.` : "This place is no longer in the city."}
+          {merchant
+            ? `${merchant.name} cannot fulfil these items together. Remove one to continue.`
+            : "This place is no longer in the city."}
         </p>
       )}
 
       <ul className="divide-y divide-line">
         {group.lines.map((line) => (
-          <LineRow key={line.key} line={line} product={group.products.find((p) => p.id === line.productId)} merchant={merchant} view={view} />
+          <LineRow
+            key={line.key}
+            line={line}
+            product={group.products.find((p) => p.id === line.productId)}
+            merchant={merchant}
+            view={view}
+          />
         ))}
       </ul>
     </section>
@@ -178,7 +213,8 @@ function LineRow({
   const { totals } = view;
   const priced = totals.lines.find((l) => l.key === line.key);
   const problem = totals.problems.find((p) => p.key === line.key)?.reason;
-  const unit = priced?.unitPriceCents ?? (product ? unitPriceCents(product, line.variantSelection) : 0);
+  const unit =
+    priced?.unitPriceCents ?? (product ? unitPriceCents(product, line.variantSelection) : 0);
   const label = product ? variantLabel(product, line.variantSelection) : undefined;
   const lineTotal = priced ? priced.lineTotalCents : unit * line.quantity;
 
@@ -198,8 +234,15 @@ function LineRow({
       />
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-3">
-          <p className="min-w-0 truncate text-[15px] font-medium">{product?.title ?? "Unavailable item"}</p>
-          <span className={cn("tabular shrink-0 text-[15px] font-semibold", priced && priced.discountCents > 0 && "text-mint")}>
+          <p className="min-w-0 truncate text-[15px] font-medium">
+            {product?.title ?? "Unavailable item"}
+          </p>
+          <span
+            className={cn(
+              "tabular shrink-0 text-[15px] font-semibold",
+              priced && priced.discountCents > 0 && "text-mint",
+            )}
+          >
             {formatCents(lineTotal, totals.currency)}
           </span>
         </div>
@@ -239,7 +282,7 @@ function PromoCode({ view }: { view: ReturnType<typeof useCartTotals> }) {
   const applied = useMemo(() => {
     if (!promoCode || totals.promoCodeApplied !== true) return null;
     const offer = offers.find((o) => o.code?.toLowerCase() === promoCode.toLowerCase());
-    return offer ? totals.appliedOffers.find((a) => a.offerId === offer.id) ?? null : null;
+    return offer ? (totals.appliedOffers.find((a) => a.offerId === offer.id) ?? null) : null;
   }, [promoCode, totals, offers]);
 
   const submit = (e: FormEvent) => {
@@ -252,7 +295,10 @@ function PromoCode({ view }: { view: ReturnType<typeof useCartTotals> }) {
       <form onSubmit={submit} className="flex gap-2">
         <label className="relative flex-1">
           <span className="sr-only">Promo code</span>
-          <Tag className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-fog-3" aria-hidden="true" />
+          <Tag
+            className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-fog-3"
+            aria-hidden="true"
+          />
           <input
             value={draft}
             onChange={(e) => setDraft(e.target.value.toUpperCase())}
@@ -264,7 +310,11 @@ function PromoCode({ view }: { view: ReturnType<typeof useCartTotals> }) {
             className="h-11 w-full rounded-lg border border-line bg-ink-2 pr-3 pl-9 text-[15px] tracking-wide text-fog placeholder:text-fog-3 focus:border-sodium focus:outline-none"
           />
         </label>
-        <Button type="submit" variant="secondary" disabled={!draft.trim() || draft.trim() === promoCode}>
+        <Button
+          type="submit"
+          variant="secondary"
+          disabled={!draft.trim() || draft.trim() === promoCode}
+        >
           Apply
         </Button>
       </form>
@@ -274,14 +324,22 @@ function PromoCode({ view }: { view: ReturnType<typeof useCartTotals> }) {
             <span>
               {promoCode} applied — {formatCents(applied.discountCents, totals.currency)} off
             </span>
-            <button type="button" onClick={() => setPromoCode("")} className="h-8 rounded px-2 text-fog-3 hover:text-fog">
+            <button
+              type="button"
+              onClick={() => setPromoCode("")}
+              className="h-8 rounded px-2 text-fog-3 hover:text-fog"
+            >
               Remove
             </button>
           </p>
         ) : (
           <p className="flex items-center justify-between text-sm text-danger">
             <span>That code did not match anything in your cart.</span>
-            <button type="button" onClick={() => setPromoCode("")} className="h-8 rounded px-2 text-fog-3 hover:text-fog">
+            <button
+              type="button"
+              onClick={() => setPromoCode("")}
+              className="h-8 rounded px-2 text-fog-3 hover:text-fog"
+            >
               Clear
             </button>
           </p>
@@ -293,26 +351,52 @@ function PromoCode({ view }: { view: ReturnType<typeof useCartTotals> }) {
 
 function Totals({ view }: { view: ReturnType<typeof useCartTotals> }) {
   const { totals, linesByMerchant } = view;
-  const merchantName = (id: string) => linesByMerchant.find((g) => g.merchantId === id)?.merchant?.name ?? "";
+  const merchantName = (id: string) =>
+    linesByMerchant.find((g) => g.merchantId === id)?.merchant?.name ?? "";
   return (
     <dl className="space-y-1.5 border-t border-line pt-4 text-sm">
       <Row label="Subtotal" value={formatCents(totals.subtotalCents, totals.currency)} />
       {totals.appliedOffers.map((o) => (
-        <Row key={o.offerId} label={o.title} value={`-${formatCents(o.discountCents, totals.currency)}`} tone="mint" />
+        <Row
+          key={o.offerId}
+          label={o.title}
+          value={`-${formatCents(o.discountCents, totals.currency)}`}
+          tone="mint"
+        />
       ))}
       {totals.byMerchant
         .filter((m) => m.feeCents > 0)
         .map((m) => (
-          <Row key={m.merchantId} label={`${feeLineLabel(m.type as FulfillmentType)} · ${merchantName(m.merchantId)}`} value={formatCents(m.feeCents, totals.currency)} />
+          <Row
+            key={m.merchantId}
+            label={`${feeLineLabel(m.type)} · ${merchantName(m.merchantId)}`}
+            value={formatCents(m.feeCents, totals.currency)}
+          />
         ))}
       <Row label="Total" value={formatCents(totals.totalCents, totals.currency)} strong />
     </dl>
   );
 }
 
-function Row({ label, value, tone, strong }: { label: string; value: string; tone?: "mint"; strong?: boolean }) {
+function Row({
+  label,
+  value,
+  tone,
+  strong,
+}: {
+  label: string;
+  value: string;
+  tone?: "mint";
+  strong?: boolean;
+}) {
   return (
-    <div className={cn("flex items-baseline justify-between gap-3", tone === "mint" && "text-mint", strong && "pt-1 text-base font-semibold")}>
+    <div
+      className={cn(
+        "flex items-baseline justify-between gap-3",
+        tone === "mint" && "text-mint",
+        strong && "pt-1 text-base font-semibold",
+      )}
+    >
       <dt className={cn("min-w-0 truncate", !strong && !tone && "text-fog-2")}>{label}</dt>
       <dd className="tabular shrink-0">{value}</dd>
     </div>

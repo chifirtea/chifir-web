@@ -36,7 +36,11 @@ export class CheckoutError extends Error {
   }
 }
 
-export const PAID_ORDER_STATUSES: ReadonlySet<OrderStatus> = new Set(["paid", "in_fulfillment", "completed"]);
+export const PAID_ORDER_STATUSES: ReadonlySet<OrderStatus> = new Set([
+  "paid",
+  "in_fulfillment",
+  "completed",
+]);
 export const XP_BASE_PER_PURCHASE = 50;
 const NEEDS_ADDRESS: ReadonlySet<FulfillmentType> = new Set(["delivery", "shipping"]);
 const MAX_LINE_QUANTITY = 99;
@@ -64,7 +68,8 @@ export function authorizeOrderAccess(
   who: { userId?: string | null; token?: string | null },
 ): boolean {
   if (order.userId && who.userId && who.userId === order.userId) return true;
-  if (who.token && order.accessTokenHash && hashesMatch(sha256(who.token), order.accessTokenHash)) return true;
+  if (who.token && order.accessTokenHash && hashesMatch(sha256(who.token), order.accessTokenHash))
+    return true;
   return false;
 }
 
@@ -92,7 +97,10 @@ export interface CreateCheckoutOrderResult {
 }
 
 /** Merges duplicate product+variant lines so quantities cannot be split to dodge caps. */
-function toCartLines(body: CheckoutRequestInput, productsById: Record<string, Product | undefined>): CartLine[] {
+function toCartLines(
+  body: CheckoutRequestInput,
+  productsById: Record<string, Product | undefined>,
+): CartLine[] {
   const byKey = new Map<string, CartLine>();
   for (const input of body.lines) {
     const key = lineKey(input.productId, input.variantSelection);
@@ -126,8 +134,12 @@ export async function createCheckoutOrder(
     ds.listMerchants(),
     ds.listOffers(),
   ]);
-  const productsById: Record<string, Product | undefined> = Object.fromEntries(products.map((p) => [p.id, p]));
-  const merchantsById: Record<string, Merchant | undefined> = Object.fromEntries(merchants.map((m) => [m.id, m]));
+  const productsById: Record<string, Product | undefined> = Object.fromEntries(
+    products.map((p) => [p.id, p]),
+  );
+  const merchantsById: Record<string, Merchant | undefined> = Object.fromEntries(
+    merchants.map((m) => [m.id, m]),
+  );
 
   const lines = toCartLines(body, productsById);
   const fulfillment: FulfillmentSelection = {};
@@ -188,7 +200,9 @@ export async function createCheckoutOrder(
     contact: body.contact,
     ...(body.promoCode ? { promoCode: body.promoCode } : {}),
     accessTokenHash,
-    ...(body.analytics ? { sessionId: body.analytics.sessionId, anonymousId: body.analytics.anonymousId } : {}),
+    ...(body.analytics
+      ? { sessionId: body.analytics.sessionId, anonymousId: body.analytics.anonymousId }
+      : {}),
     paymentProvider,
     ...(input.userId ? { userId: input.userId } : {}),
     items,
@@ -207,7 +221,9 @@ export async function createCheckoutOrder(
       subtotalCents: m.subtotalCents,
       feeCents: m.feeCents,
       recipient: body.contact,
-      ...(NEEDS_ADDRESS.has(m.type) && body.deliveryAddress ? { deliveryAddress: body.deliveryAddress } : {}),
+      ...(NEEDS_ADDRESS.has(m.type) && body.deliveryAddress
+        ? { deliveryAddress: body.deliveryAddress }
+        : {}),
       events: [],
     });
   }
@@ -226,12 +242,21 @@ function distinct(values: Array<string | undefined>): string[] {
  * Grants the order's digital twins and purchase XP to a user. Idempotent: `grantReward` upserts
  * and `addXp` is keyed by (user, reason, order). Safe to call from the webhook and from a later claim.
  */
-export async function grantOrderRewards(order: Order, userId: string, ds: DataSource = getDataSource()): Promise<void> {
+export async function grantOrderRewards(
+  order: Order,
+  userId: string,
+  ds: DataSource = getDataSource(),
+): Promise<void> {
   if (!PAID_ORDER_STATUSES.has(order.status)) return;
   for (const rewardId of distinct(order.items.map((i) => i.digitalRewardId))) {
     await ds.grantReward(userId, rewardId, order.id);
   }
-  await ds.addXp(userId, XP_BASE_PER_PURCHASE + Math.floor(order.totalCents / 100), "purchase", order.id);
+  await ds.addXp(
+    userId,
+    XP_BASE_PER_PURCHASE + Math.floor(order.totalCents / 100),
+    "purchase",
+    order.id,
+  );
 }
 
 /**
@@ -239,12 +264,18 @@ export async function grantOrderRewards(order: Order, userId: string, ds: DataSo
  * idempotency guard). Redeems offers, hands each merchant's fulfillment to its provider, grants
  * rewards and XP for signed-in buyers, and records `purchase_completed`.
  */
-export async function completeOrder(order: Order, ds: DataSource = getDataSource()): Promise<Order> {
+export async function completeOrder(
+  order: Order,
+  ds: DataSource = getDataSource(),
+): Promise<Order> {
   const now = new Date();
 
   for (const offerId of distinct(order.items.map((i) => i.offerId))) {
     const counted = await ds.redeemOffer(offerId);
-    if (!counted) console.warn(`[commerce] offer ${offerId} could not be redeemed for order ${order.id} (cap reached or expired after pricing)`);
+    if (!counted)
+      console.warn(
+        `[commerce] offer ${offerId} could not be redeemed for order ${order.id} (cap reached or expired after pricing)`,
+      );
   }
 
   for (const fulfillment of order.fulfillments) {
@@ -310,7 +341,8 @@ export async function refreshOrderStatus(
 
   let result: Order = changed ? { ...order, fulfillments } : order;
   let status: OrderStatus = result.status;
-  const allDelivered = fulfillments.length > 0 && fulfillments.every((f) => f.status === "delivered");
+  const allDelivered =
+    fulfillments.length > 0 && fulfillments.every((f) => f.status === "delivered");
   if (allDelivered) status = "completed";
   else if (fulfillments.length > 0 && status === "paid") status = "in_fulfillment";
   if (status !== result.status) result = await ds.updateOrder(order.id, { status });

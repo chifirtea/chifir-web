@@ -1,8 +1,11 @@
 import type { Address, CartLine, FulfillmentSelection, OrderContact } from "@/types/domain";
 import { flush, getAnonymousId, getSessionId, track } from "@/lib/analytics/client";
-import { useCartStore } from "@/features/cart/cartStore";
 import type { CartTotals } from "@/features/cart/pricing";
-import type { CheckoutProblem, CheckoutResponse, CommerceErrorResponse } from "@/lib/commerce/types";
+import type {
+  CheckoutProblem,
+  CheckoutResponse,
+  CommerceErrorResponse,
+} from "@/lib/commerce/types";
 
 export interface StartCheckoutInput {
   lines: CartLine[];
@@ -46,7 +49,9 @@ export async function startCheckout(input: StartCheckoutInput): Promise<StartChe
     },
     ...(input.deliveryAddress ? { deliveryAddress: input.deliveryAddress } : {}),
     ...(input.promoCode?.trim() ? { promoCode: input.promoCode.trim() } : {}),
-    ...(ANALYTICS_ID.test(sessionId) && ANALYTICS_ID.test(anonymousId) ? { analytics: { sessionId, anonymousId } } : {}),
+    ...(ANALYTICS_ID.test(sessionId) && ANALYTICS_ID.test(anonymousId)
+      ? { analytics: { sessionId, anonymousId } }
+      : {}),
   };
 
   let res: Response;
@@ -57,16 +62,29 @@ export async function startCheckout(input: StartCheckoutInput): Promise<StartChe
       body: JSON.stringify(body),
     });
   } catch {
-    return { ok: false, status: 0, error: "You appear to be offline. Check your connection and try again." };
+    return {
+      ok: false,
+      status: 0,
+      error: "You appear to be offline. Check your connection and try again.",
+    };
   }
 
-  const data = (await res.json().catch(() => null)) as (CheckoutResponse & Partial<CommerceErrorResponse>) | null;
+  const data = (await res.json().catch(() => null)) as
+    (CheckoutResponse & Partial<CommerceErrorResponse>) | null;
   if (!res.ok || !data?.url) {
     const error =
       res.status === 503
         ? "Checkout is not set up in this build."
-        : (data?.error ?? (res.status >= 500 ? "Something went wrong on our side. Please try again." : "Could not start checkout."));
-    return { ok: false, status: res.status, error, ...(data?.problems ? { problems: data.problems } : {}) };
+        : (data?.error ??
+          (res.status >= 500
+            ? "Something went wrong on our side. Please try again."
+            : "Could not start checkout."));
+    return {
+      ok: false,
+      status: res.status,
+      error,
+      ...(data?.problems ? { problems: data.problems } : {}),
+    };
   }
 
   track("checkout_initiated", {
@@ -76,7 +94,14 @@ export async function startCheckout(input: StartCheckoutInput): Promise<StartChe
     provider: data.demo ? "demo" : "stripe",
   });
   flush(true);
-  useCartStore.getState().clear();
+  // The cart is kept until the order is actually paid (see OrderStatus), so a cancelled
+  // checkout leaves everything in place.
   window.location.assign(data.url);
-  return { ok: true, url: data.url, orderId: data.orderId, demo: Boolean(data.demo), free: Boolean(data.free) };
+  return {
+    ok: true,
+    url: data.url,
+    orderId: data.orderId,
+    demo: Boolean(data.demo),
+    free: Boolean(data.free),
+  };
 }

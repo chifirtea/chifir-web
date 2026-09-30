@@ -4,7 +4,11 @@ import type { CommerceErrorResponse } from "./types";
 
 /** Small helpers so every commerce route validates the same way and never leaks internals. */
 
-export function jsonError(status: number, error: string, extra: Omit<CommerceErrorResponse, "error"> = {}) {
+export function jsonError(
+  status: number,
+  error: string,
+  extra: Omit<CommerceErrorResponse, "error"> = {},
+) {
   return NextResponse.json<CommerceErrorResponse>({ error, ...extra }, { status });
 }
 
@@ -30,7 +34,10 @@ export async function parseBody<S extends z.ZodType>(
   }
   const parsed = schema.safeParse(json);
   if (!parsed.success) {
-    return { ok: false, response: jsonError(400, "Invalid request", { issues: z.flattenError(parsed.error) }) };
+    return {
+      ok: false,
+      response: jsonError(400, "Invalid request", { issues: z.flattenError(parsed.error) }),
+    };
   }
   return { ok: true, data: parsed.data };
 }

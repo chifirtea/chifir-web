@@ -6,15 +6,18 @@ import type { DataSource } from "./types";
 
 export type { DataSource } from "./types";
 
-let instance: DataSource | null = null;
-
 /**
  * Process-wide DataSource. Supabase when fully configured, otherwise the in-memory static source
- * over the seed data (see ADR-002).
+ * over the seed data (see ADR-002). Held on `globalThis` because `next dev` may evaluate this
+ * module once per route bundle, and the static source keeps demo orders in memory.
  */
+const KEY = "__chifir_data_source__";
+type Holder = { [KEY]?: DataSource };
+
 export function getDataSource(): DataSource {
-  if (!instance) {
-    instance = features.supabase ? new SupabaseDataSource() : new StaticDataSource();
+  const holder = globalThis as unknown as Holder;
+  if (!holder[KEY]) {
+    holder[KEY] = features.supabase ? new SupabaseDataSource() : new StaticDataSource();
   }
-  return instance;
+  return holder[KEY];
 }

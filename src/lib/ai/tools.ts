@@ -315,29 +315,39 @@ function hoursToday(m: Merchant, now: Date): { day: Weekday; intervals: Array<{ 
 }
 
 /**
- * Serializes a tool result and shrinks it below the byte cap: descriptions are shortened first,
- * then image urls dropped, then the largest list is trimmed from the end.
+ * Serializes a tool result and shrinks it below the character cap without ever producing invalid
+ * JSON: image urls go first, then descriptions are shortened, then the largest shallow list is
+ * trimmed from the end (marking its parent `truncated: true`). Returns the compacted value too so
+ * callers emit cards for exactly what the model can see.
  */
-export function compactJson(value: unknown, maxChars = MAX_TOOL_RESULT_CHARS): string {
-  let json = JSON.stringify(value);
-  if (json.length <= maxChars) return json;
-  let current = shrinkStrings(value, 80, false);
-  json = JSON.stringify(current);
-  if (json.length <= maxChars) return json;
-  current = shrinkStrings(current, 60, true);
-  json = JSON.stringify(current);
-  while (json.length > maxChars && current && typeof current === "object" && !Array.isArray(current)) {
-    const record = { ...(current as Record<string, unknown>) };
-    const [key, list] = Object.entries(record)
-      .filter((entry): entry is [string, unknown[]] => Array.isArray(entry[1]) && entry[1].length > 0)
-      .sort((a, b) => b[1].length - a[1].length)[0] ?? [undefined, undefined];
-    if (!key || !list) break;
-    record[key] = list.slice(0, -1);
-    record.truncated = true;
-    current = record;
+export function compactValue<T>(value: T, maxChars = MAX_TOOL_RESULT_CHARS): { json: string; value: T } {
+  let current: unknown = value;
+  let json = JSON.stringify(current);
+  const stages: Array<(v: unknown) => unknown> = [
+    (v) => shrinkStrings(v, 200, true),
+    (v) => shrinkStrings(v, 100, true),
+    (v) => shrinkStrings(v, 60, true),
+  ];
+  for (const stage of stages) {
+    if (json.length <= maxChars) break;
+    current = stage(current);
     json = JSON.stringify(current);
   }
-  return json.length <= maxChars ? json : json.slice(0, maxChars);
+  for (let guard = 0; json.length > maxChars && guard < 1000; guard++) {
+    const target = largestShallowArray(current);
+    if (!target) break;
+    current = trimArrayAt(current, target.path);
+    json = JSON.stringify(current);
+  }
+  if (json.length > maxChars) {
+    current = { error: "Result too large to show. Narrow the query." };
+    json = JSON.stringify(current);
+  }
+  return { json, value: current as T };
+}
+
+export function compactJson(value: unknown, maxChars = MAX_TOOL_RESULT_CHARS): string {
+  return compactValue(value, maxChars).json;
 }
 
 function shrinkStrings(value: unknown, descLen: number, dropImages: boolean): unknown {
@@ -354,12 +364,51 @@ function shrinkStrings(value: unknown, descLen: number, dropImages: boolean): un
   return value;
 }
 
+type Path = Array<string | number>;
+
+/** The non-empty array closest to the root (ties: the longest). Lists of results live near the top. */
+function largestShallowArray(value: unknown, path: Path = [], best: { path: Path; size: number } | null = null): { path: Path; size: number } | null {
+  if (Array.isArray(value)) {
+    if (value.length > 0 && (!best || path.length < best.path.length || (path.length === best.path.length && value.length > best.size))) {
+      best = { path, size: value.length };
+    }
+    value.forEach((v, i) => {
+      best = largestShallowArray(v, [...path, i], best);
+    });
+    return best;
+  }
+  if (value && typeof value === "object") {
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) best = largestShallowArray(v, [...path, k], best);
+  }
+  return best;
+}
+
+function trimArrayAt(value: unknown, path: Path): unknown {
+  if (path.length === 0) return Array.isArray(value) ? value.slice(0, -1) : value;
+  const [head, ...rest] = path;
+  if (Array.isArray(value)) {
+    return value.map((v, i) => (i === head ? trimArrayAt(v, rest) : v));
+  }
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    return { ...record, [head as string]: trimArrayAt(record[head as string], rest), ...(rest.length === 0 ? { truncated: true } : {}) };
+  }
+  return value;
+}
+
 function errorResult(message: string) {
   return { content: JSON.stringify({ error: message }), isError: true };
 }
 
 function scopedMerchantId(ctx: ToolContext): string | undefined {
   return ctx.scope === "employee" ? ctx.merchantId : undefined;
+}
+
+/** Cards for exactly the products that survived compaction (the ones the model can quote). */
+function emitProductCards(ctx: ToolContext, facts: ProductFactWithOffer[], kept: Array<{ id: string }>): void {
+  const ids = new Set(kept.map((p) => p.id));
+  const cards = facts.filter((f) => ids.has(f.id)).map(toProductCard);
+  if (cards.length) ctx.emit({ type: "cards", products: cards });
 }
 
 // -------------------------------------------------------------------------------------- tools
@@ -373,8 +422,7 @@ export const searchMerchants: AiTool = defineTool({
     const merchants = await ctx.ds.searchMerchants({ ...input, limit: Math.min(input.limit ?? MAX_MERCHANTS, MAX_MERCHANTS) });
     const geo = await geoFor(ctx);
     const cards = merchants.map((m) => toMerchantCard(m, ctx.now));
-    if (cards.length) ctx.emit({ type: "cards", merchants: cards });
-    return compactJson({
+    const { json, value } = compactValue({
       count: cards.length,
       merchants: merchants.map((m, i) => ({
         ...cards[i]!,
@@ -384,6 +432,9 @@ export const searchMerchants: AiTool = defineTool({
       })),
       ...(cards.length === 0 ? { note: "No merchants matched. Relax a filter or search products directly." } : {}),
     });
+    const shown = new Set(value.merchants.map((m) => m.id));
+    if (shown.size) ctx.emit({ type: "cards", merchants: cards.filter((c) => shown.has(c.id)) });
+    return json;
   },
 });
 
@@ -401,12 +452,13 @@ export const searchProducts: AiTool = defineTool({
     });
     const geo = await geoFor(ctx);
     const facts = products.map((p) => toProductFact(p, geo.merchantById.get(p.merchantId), geo.offers, ctx.now));
-    if (facts.length) ctx.emit({ type: "cards", products: facts.map(toProductCard) });
-    return compactJson({
+    const { json, value } = compactValue({
       count: facts.length,
       products: facts,
       ...(facts.length === 0 ? { note: "Nothing matched. Try fewer filters, a higher price ceiling or a broader query, then offer the closest real alternative." } : {}),
     });
+    emitProductCards(ctx, facts, value.products);
+    return json;
   },
 });
 
@@ -433,10 +485,9 @@ export const getMerchant: AiTool = defineTool({
       .slice(0, 8)
       .map((p) => toProductFact(p, m, offers, ctx.now));
     const card = toMerchantCard(m, ctx.now);
-    ctx.emit({ type: "cards", merchants: [card], ...(top.length ? { products: top.map(toProductCard) } : {}) });
     const f = m.fulfillment;
     const today = hoursToday(m, ctx.now);
-    return compactJson({
+    const { json, value } = compactValue({
       merchant: {
         ...card,
         description: trimText(m.description, 300),
@@ -467,6 +518,9 @@ export const getMerchant: AiTool = defineTool({
         topProducts: top,
       },
     });
+    ctx.emit({ type: "cards", merchants: [card] });
+    emitProductCards(ctx, top, value.merchant.topProducts);
+    return json;
   },
 });
 
@@ -684,9 +738,10 @@ export const recommendItems: AiTool = defineTool({
     const products = (await ctx.ds.getProducts(input.productIds)).filter((p) => !pinned || p.merchantId === pinned);
     const geo = await geoFor(ctx);
     const facts = products.map((p) => toProductFact(p, geo.merchantById.get(p.merchantId), geo.offers, ctx.now));
-    if (facts.length) ctx.emit({ type: "cards", products: facts.map(toProductCard) });
     const missing = input.productIds.filter((id) => !products.some((p) => p.id === id));
-    return compactJson({ count: facts.length, products: facts, ...(missing.length ? { unknownIds: missing } : {}) });
+    const { json, value } = compactValue({ count: facts.length, products: facts, ...(missing.length ? { unknownIds: missing } : {}) });
+    emitProductCards(ctx, facts, value.products);
+    return json;
   },
 });
 

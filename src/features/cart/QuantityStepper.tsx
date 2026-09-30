@@ -38,9 +38,16 @@ export function QuantityStepper({
         onClick={() => onChange(Math.max(min, value - 1))}
         disabled={value <= min}
         aria-label={willRemove ? "Remove" : "Decrease quantity"}
-        className={cn(dim, "flex items-center justify-center rounded-l-xl text-fog-2 transition-colors hover:bg-white/6 hover:text-fog disabled:opacity-40")}
+        className={cn(
+          dim,
+          "flex items-center justify-center rounded-l-xl text-fog-2 transition-colors hover:bg-white/6 hover:text-fog disabled:opacity-40",
+        )}
       >
-        {willRemove ? <Trash2 className="h-4 w-4" aria-hidden="true" /> : <Minus className="h-4 w-4" aria-hidden="true" />}
+        {willRemove ? (
+          <Trash2 className="h-4 w-4" aria-hidden="true" />
+        ) : (
+          <Minus className="h-4 w-4" aria-hidden="true" />
+        )}
       </button>
       <output aria-live="polite" className="tabular min-w-8 text-center text-[15px] font-semibold">
         {value}
@@ -50,7 +57,10 @@ export function QuantityStepper({
         onClick={() => onChange(Math.min(max, value + 1))}
         disabled={value >= max}
         aria-label="Increase quantity"
-        className={cn(dim, "flex items-center justify-center rounded-r-xl text-fog-2 transition-colors hover:bg-white/6 hover:text-fog disabled:opacity-40")}
+        className={cn(
+          dim,
+          "flex items-center justify-center rounded-r-xl text-fog-2 transition-colors hover:bg-white/6 hover:text-fog disabled:opacity-40",
+        )}
       >
         <Plus className="h-4 w-4" aria-hidden="true" />
       </button>

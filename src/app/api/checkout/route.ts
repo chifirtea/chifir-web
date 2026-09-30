@@ -57,7 +57,11 @@ export async function POST(req: NextRequest) {
     });
   } catch (err) {
     if (err instanceof CheckoutError) {
-      return jsonError(err.status, err.message, err.problems.length ? { problems: err.problems } : {});
+      return jsonError(
+        err.status,
+        err.message,
+        err.problems.length ? { problems: err.problems } : {},
+      );
     }
     console.error("[api/checkout]", err);
     return jsonError(500, "Checkout failed. Please try again.");

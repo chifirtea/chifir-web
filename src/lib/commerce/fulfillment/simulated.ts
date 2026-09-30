@@ -59,7 +59,9 @@ export function estimateEta(type: FulfillmentType, merchant: Merchant | null, no
   const f = merchant?.fulfillment;
   switch (type) {
     case "delivery":
-      return new Date(now.getTime() + (f?.delivery?.minutesMax ?? DEFAULT_DELIVERY_MINUTES) * MINUTE);
+      return new Date(
+        now.getTime() + (f?.delivery?.minutesMax ?? DEFAULT_DELIVERY_MINUTES) * MINUTE,
+      );
     case "pickup":
     case "booking":
       return new Date(now.getTime() + (f?.pickup?.minutesMax ?? DEFAULT_PICKUP_MINUTES) * MINUTE);
@@ -80,7 +82,11 @@ export class SimulatedProvider implements FulfillmentProvider {
     const at = now.toISOString();
     const events: FulfillmentEvent[] = [
       { status: "pending", at },
-      { status: "accepted", at, note: `${fulfillment.merchantNameSnapshot || "The merchant"} accepted your order.` },
+      {
+        status: "accepted",
+        at,
+        note: `${fulfillment.merchantNameSnapshot || "The merchant"} accepted your order.`,
+      },
     ];
     const externalId = `sim_${fulfillment.id}`;
     if (IMMEDIATE.has(fulfillment.type)) {
@@ -125,7 +131,9 @@ export class SimulatedProvider implements FulfillmentProvider {
       ...fulfillment,
       status,
       events,
-      ...(shipped && !fulfillment.trackingUrl ? { trackingUrl: `/orders/${fulfillment.orderId}` } : {}),
+      ...(shipped && !fulfillment.trackingUrl
+        ? { trackingUrl: `/orders/${fulfillment.orderId}` }
+        : {}),
     };
   }
 
