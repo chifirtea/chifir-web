@@ -45,7 +45,11 @@ export function Player({ avatar }: { avatar?: AvatarConfig }) {
 
   return (
     <>
-      <group ref={group} position={[playerRig.x, playerRig.y, playerRig.z]} rotation-y={playerRig.yaw}>
+      <group
+        ref={group}
+        position={[playerRig.x, playerRig.y, playerRig.z]}
+        rotation-y={playerRig.yaw}
+      >
         <Avatar avatar={avatar} />
       </group>
       <FollowCamera />

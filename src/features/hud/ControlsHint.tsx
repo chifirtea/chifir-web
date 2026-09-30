@@ -2,20 +2,33 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { X } from "lucide-react";
+import { useInputStore } from "@/engine/input/inputStore";
 import { useWorldStore } from "@/engine/store/worldStore";
 import { useIsTouch } from "./useMediaQuery";
 
 const KEY = "chifir.hint.v1";
 const AUTO_DISMISS_MS = 8000;
 
+/** Whether the hint was dismissed before (localStorage may be unavailable in private mode). */
+function readDismissed(): boolean {
+  try {
+    return Boolean(localStorage.getItem(KEY));
+  } catch {
+    return false;
+  }
+}
+
 /** First-visit controls hint. Shows once the city is ready, goes away on its own after 8 s. */
 export function ControlsHint() {
   const ready = useWorldStore((s) => s.ready);
-  const touch = useIsTouch();
-  const [visible, setVisible] = useState(false);
+  const touchStore = useInputStore((s) => s.touch);
+  const coarse = useIsTouch();
+  const touch = touchStore || coarse;
+  const [dismissed, setDismissed] = useState(readDismissed);
+  const visible = ready && !dismissed;
 
   const dismiss = useCallback(() => {
-    setVisible(false);
+    setDismissed(true);
     try {
       localStorage.setItem(KEY, String(Date.now()));
     } catch {
@@ -24,16 +37,10 @@ export function ControlsHint() {
   }, []);
 
   useEffect(() => {
-    if (!ready) return;
-    try {
-      if (localStorage.getItem(KEY)) return;
-    } catch {
-      // ignore
-    }
-    setVisible(true);
+    if (!visible) return;
     const t = setTimeout(dismiss, AUTO_DISMISS_MS);
     return () => clearTimeout(t);
-  }, [ready, dismiss]);
+  }, [visible, dismiss]);
 
   if (!visible) return null;
 
@@ -41,8 +48,8 @@ export function ControlsHint() {
     <div className="pointer-events-auto flex h-11 max-w-[calc(100vw-32px)] items-center gap-2 rounded-full border border-line bg-ink/92 pr-1 pl-4 text-[13px] text-fog-2 shadow-sign backdrop-blur-md">
       {touch ? (
         <span className="truncate">
-          <b className="font-semibold text-fog">Left:</b> move · <b className="font-semibold text-fog">Right:</b> look · Tap
-          prompts to interact
+          <b className="font-semibold text-fog">Left:</b> move ·{" "}
+          <b className="font-semibold text-fog">Right:</b> look · Tap prompts to interact
         </span>
       ) : (
         <span className="truncate">

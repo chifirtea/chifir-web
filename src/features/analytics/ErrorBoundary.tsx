@@ -27,7 +27,11 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, State> {
   override componentDidCatch(error: Error, info: ErrorInfo): void {
     const message = String(error?.message ?? error).slice(0, 500);
     const stack = (error?.stack ?? info.componentStack ?? "").slice(0, 2000);
-    track("error_client", { message, ...(stack ? { stack } : {}), where: this.props.where ?? "boundary" });
+    track("error_client", {
+      message,
+      ...(stack ? { stack } : {}),
+      where: this.props.where ?? "boundary",
+    });
     this.props.onError?.(error, info);
   }
 

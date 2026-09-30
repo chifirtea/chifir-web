@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { OpeningHours } from "@/types/domain";
-import { formatClock, fulfillmentEtaLabel, openNowLabel, openNowStatus, priceLevelLabel } from "./openNow";
+import {
+  formatClock,
+  fulfillmentEtaLabel,
+  openNowLabel,
+  openNowStatus,
+  priceLevelLabel,
+} from "./openNow";
 
 // September 2026 is CDT (UTC-5). 2026-09-30 is a Wednesday.
 const chicago = (iso: string) => new Date(`${iso}-05:00`);
@@ -53,7 +59,9 @@ describe("openNowStatus", () => {
   });
 
   it("is 'Closed' when no day has hours", () => {
-    expect(openNowStatus({ timezone: "America/Chicago", weekly: {} }, chicago("2026-09-30T12:00:00"))).toEqual({
+    expect(
+      openNowStatus({ timezone: "America/Chicago", weekly: {} }, chicago("2026-09-30T12:00:00")),
+    ).toEqual({
       open: false,
       label: "Closed",
     });
@@ -65,7 +73,10 @@ describe("openNowStatus", () => {
   });
 
   it("evaluates in the merchant's zone, not the process zone", () => {
-    const tokyo: OpeningHours = { timezone: "Asia/Tokyo", weekly: { thu: [{ open: "09:00", close: "17:00" }] } };
+    const tokyo: OpeningHours = {
+      timezone: "Asia/Tokyo",
+      weekly: { thu: [{ open: "09:00", close: "17:00" }] },
+    };
     // 2026-09-30T13:00 Chicago = 2026-10-01T03:00 Tokyo (Thursday, before opening).
     expect(openNowLabel(tokyo, chicago("2026-09-30T13:00:00"))).toBe("Opens 9 AM");
   });
@@ -104,12 +115,20 @@ describe("chip helpers", () => {
       }),
     ).toBe("25–40 min delivery");
     expect(
-      fulfillmentEtaLabel({ provider: "simulated", pickup: { enabled: true, minutesMin: 10, minutesMax: 15 } }),
+      fulfillmentEtaLabel({
+        provider: "simulated",
+        pickup: { enabled: true, minutesMin: 10, minutesMax: 15 },
+      }),
     ).toBe("10–15 min pickup");
     expect(
-      fulfillmentEtaLabel({ provider: "shippo", shipping: { enabled: true, feeCents: 900, daysMin: 3, daysMax: 5 } }),
+      fulfillmentEtaLabel({
+        provider: "shippo",
+        shipping: { enabled: true, feeCents: 900, daysMin: 3, daysMax: 5 },
+      }),
     ).toBe("3–5 day shipping");
-    expect(fulfillmentEtaLabel({ provider: "simulated", booking: { enabled: true, slotMinutes: 60 } })).toBe("Bookings");
+    expect(
+      fulfillmentEtaLabel({ provider: "simulated", booking: { enabled: true, slotMinutes: 60 } }),
+    ).toBe("Bookings");
     expect(fulfillmentEtaLabel({ provider: "simulated" })).toBeNull();
     expect(fulfillmentEtaLabel(undefined)).toBeNull();
   });

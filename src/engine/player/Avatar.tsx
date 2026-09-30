@@ -96,7 +96,14 @@ interface BodyProps {
   phase?: number;
 }
 
-function AvatarBody({ bodyColor, hairColor, castShadow, speedRef, runningRef, phase = 0 }: BodyProps) {
+function AvatarBody({
+  bodyColor,
+  hairColor,
+  castShadow,
+  speedRef,
+  runningRef,
+  phase = 0,
+}: BodyProps) {
   const geo = getGeometry();
   const body = useRef<Group>(null);
   const torso = useRef<Group>(null);

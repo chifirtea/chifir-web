@@ -6,6 +6,7 @@ import {
   useEffect,
   useRef,
   useState,
+  useSyncExternalStore,
   type CSSProperties,
   type PointerEvent as ReactPointerEvent,
   type WheelEvent as ReactWheelEvent,
@@ -23,6 +24,17 @@ const BASE_SIZE = RADIUS * 2;
 const KNOB_SIZE = 48;
 
 const NO_POINTER = -1;
+
+// Decided once: a tablet that gains a mouse mid-session should keep its touch controls.
+const noop = () => () => {};
+const readCoarsePointer = () =>
+  (typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches) ||
+  navigator.maxTouchPoints > 0;
+const serverSnapshot = () => false;
+
+function useCoarsePointer(): boolean {
+  return useSyncExternalStore(noop, readCoarsePointer, serverSnapshot);
+}
 
 interface StickState {
   id: number;
@@ -109,7 +121,7 @@ const runButtonStyle = (latched: boolean): CSSProperties => ({
  * `pointer-events: none` while an overlay owns input, so panels and buttons always win.
  */
 export function VirtualJoystick() {
-  const [touch, setTouch] = useState(false);
+  const touch = useCoarsePointer();
   const [runLatched, setRunLatched] = useState(false);
   const locked = useWorldStore(selectInputLocked);
 
@@ -119,15 +131,10 @@ export function VirtualJoystick() {
   const stick = useRef<StickState>({ id: NO_POINTER, originX: 0, originY: 0, out: false });
   const look = useRef<LookState>({ id: NO_POINTER, lastX: 0, lastY: 0 });
   const latchedRef = useRef(false);
-  latchedRef.current = runLatched;
 
   useEffect(() => {
-    const coarse =
-      (typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches) ||
-      navigator.maxTouchPoints > 0;
-    setTouch(coarse);
-    useInputStore.getState().setTouch(coarse);
-  }, []);
+    useInputStore.getState().setTouch(touch);
+  }, [touch]);
 
   const syncRun = useCallback(() => {
     useInputStore.getState().setRun(latchedRef.current || stick.current.out);
@@ -155,10 +162,10 @@ export function VirtualJoystick() {
     releaseLook();
   }, [locked, releaseStick, releaseLook]);
 
+  // The latch is read from pointer handlers, so mirror it into a ref and re-derive `run`.
   useEffect(() => {
-    if (!runLatched) return;
+    latchedRef.current = runLatched;
     syncRun();
-    return () => syncRun();
   }, [runLatched, syncRun]);
 
   const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {

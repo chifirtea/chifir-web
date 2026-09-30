@@ -5,8 +5,12 @@ export default function NotFound() {
     <main className="flex min-h-screen items-center justify-center bg-night p-4 text-fog">
       <div className="w-full max-w-md text-center">
         <div className="eyebrow">404</div>
-        <h1 className="font-display mt-2 text-4xl font-bold tracking-tight">This street doesn&rsquo;t exist.</h1>
-        <p className="mt-3 text-[15px] text-fog-2">Not yet, anyway. Every real place is a short walk from the plaza.</p>
+        <h1 className="font-display mt-2 text-4xl font-bold tracking-tight">
+          This street doesn&rsquo;t exist.
+        </h1>
+        <p className="mt-3 text-[15px] text-fog-2">
+          Not yet, anyway. Every real place is a short walk from the plaza.
+        </p>
         <div className="mt-7 flex flex-col justify-center gap-2 sm:flex-row">
           <Link
             href="/city"

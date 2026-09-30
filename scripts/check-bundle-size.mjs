@@ -53,7 +53,9 @@ if (loadableManifest) {
 }
 
 if (files.size === 0) {
-  console.error(`Route ${ROUTE} not found in the manifests. Known routes: ${Object.keys(appManifest?.pages ?? {}).join(", ")}`);
+  console.error(
+    `Route ${ROUTE} not found in the manifests. Known routes: ${Object.keys(appManifest?.pages ?? {}).join(", ")}`,
+  );
   process.exit(2);
 }
 
@@ -67,7 +69,13 @@ for (const [file, group] of files) {
     continue;
   }
   const buf = readFileSync(p);
-  rows.push({ file, group, raw: statSync(p).size, gzip: gzipSync(buf, { level: 9 }).length, missing: false });
+  rows.push({
+    file,
+    group,
+    raw: statSync(p).size,
+    gzip: gzipSync(buf, { level: 9 }).length,
+    missing: false,
+  });
 }
 
 rows.sort((a, b) => b.gzip - a.gzip);
@@ -79,17 +87,23 @@ const total = totals.root + totals.route + totals.lazy;
 console.log(`\n/city JS chunks (gzip, level 9) — dist: ${path.relative(process.cwd(), DIST)}\n`);
 console.log(`${"gzip KB".padStart(8)}  ${"raw KB".padStart(8)}  group  file`);
 for (const r of rows) {
-  console.log(`${kb(r.gzip)}  ${kb(r.raw)}  ${r.group.padEnd(5)}  ${r.file}${r.missing ? "  (missing on disk)" : ""}`);
+  console.log(
+    `${kb(r.gzip)}  ${kb(r.raw)}  ${r.group.padEnd(5)}  ${r.file}${r.missing ? "  (missing on disk)" : ""}`,
+  );
 }
 console.log("");
 console.log(`  root chunks   ${kb(totals.root)} KB`);
 console.log(`  route chunks  ${kb(totals.route)} KB`);
-console.log(`  lazy CityApp  ${kb(totals.lazy)} KB${loadableManifest ? "" : "  (no react-loadable-manifest.json; lazy chunks not counted)"}`);
+console.log(
+  `  lazy CityApp  ${kb(totals.lazy)} KB${loadableManifest ? "" : "  (no react-loadable-manifest.json; lazy chunks not counted)"}`,
+);
 console.log(`  total         ${kb(total)} KB   budget ${BUDGET_KB} KB`);
 if (missing) console.log(`  ${missing} listed file(s) missing on disk`);
 
 if (total / 1024 > BUDGET_KB) {
-  console.error(`\n✗ /city first-load JS is ${(total / 1024).toFixed(1)} KB gzipped, over the ${BUDGET_KB} KB budget.`);
+  console.error(
+    `\n✗ /city first-load JS is ${(total / 1024).toFixed(1)} KB gzipped, over the ${BUDGET_KB} KB budget.`,
+  );
   process.exit(1);
 }
 console.log(`\n✓ /city first-load JS is within budget.\n`);

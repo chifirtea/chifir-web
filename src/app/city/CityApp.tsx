@@ -130,7 +130,9 @@ export function CityApp({ snapshot, deepLinkTo, ask, checkout }: CityAppProps) {
   }, [ask, ready, setConciergeOpen]);
 
   // `?checkout=cancelled`: one quiet notice, then clean the URL so a reload does not repeat it.
-  const [toast, setToast] = useState<string | null>(checkout === "cancelled" ? "Checkout cancelled. Your cart is still here." : null);
+  const [toast, setToast] = useState<string | null>(
+    checkout === "cancelled" ? "Checkout cancelled. Your cart is still here." : null,
+  );
   useEffect(() => {
     if (checkout !== "cancelled") return;
     try {
@@ -150,6 +152,7 @@ export function CityApp({ snapshot, deepLinkTo, ask, checkout }: CityAppProps) {
       <AnalyticsProvider>
         <ErrorBoundary
           where="canvas"
+          onError={() => setLoaderMounted(false)}
           fallback={
             <CanvasCrashCard
               onReload={reload}
@@ -161,7 +164,11 @@ export function CityApp({ snapshot, deepLinkTo, ask, checkout }: CityAppProps) {
           }
         >
           <CityCanvas>
-            {location.kind === "street" ? <CityScene /> : <InteriorScene merchantId={location.merchantId} />}
+            {location.kind === "street" ? (
+              <CityScene />
+            ) : (
+              <InteriorScene merchantId={location.merchantId} />
+            )}
             <Player />
             <HotspotScanner />
             <WaypointBeacon />
@@ -180,7 +187,17 @@ export function CityApp({ snapshot, deepLinkTo, ask, checkout }: CityAppProps) {
         <Fade />
 
         {toast ? (
-          <Toast message={toast} action={{ label: "Open cart", onClick: () => { closeToast(); setCartOpen(true); } }} onClose={closeToast} />
+          <Toast
+            message={toast}
+            action={{
+              label: "Open cart",
+              onClick: () => {
+                closeToast();
+                setCartOpen(true);
+              },
+            }}
+            onClose={closeToast}
+          />
         ) : null}
 
         {loaderMounted ? <LoadingScreen hidden={ready || loaderTimedOut} /> : null}
@@ -194,7 +211,9 @@ function CanvasCrashCard({ onReload, onBrowse }: { onReload: () => void; onBrows
     <div className="absolute inset-0 flex items-center justify-center p-4">
       <div className="sign w-full max-w-sm p-6">
         <div className="eyebrow">Sorry</div>
-        <h2 className="font-display mt-1 text-xl font-semibold tracking-tight">The 3D view crashed on this device.</h2>
+        <h2 className="font-display mt-1 text-xl font-semibold tracking-tight">
+          The 3D view crashed on this device.
+        </h2>
         <p className="mt-2 text-[14px] text-fog-2">
           You can reload, or browse every place in the city as a list instead.
         </p>

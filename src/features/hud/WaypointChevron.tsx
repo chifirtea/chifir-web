@@ -52,8 +52,12 @@ export function WaypointChevron() {
         />
       </span>
       <span className="min-w-0 text-[14px] leading-none">
-        <span className="font-display block truncate font-semibold tracking-tight">{waypoint.label}</span>
-        <span className="tabular mt-0.5 block text-[12px] text-fog-3">{formatDistance(state.distance)}</span>
+        <span className="font-display block truncate font-semibold tracking-tight">
+          {waypoint.label}
+        </span>
+        <span className="tabular mt-0.5 block text-[12px] text-fog-3">
+          {formatDistance(state.distance)}
+        </span>
       </span>
       <button
         type="button"

@@ -35,10 +35,18 @@ let shared: Shared | null = null;
 
 function unlit(color: string, opacity: number): MeshBasicMaterial {
   // Unlit + not tone mapped so the tint reads as emissive under the night lighting.
-  return new MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, toneMapped: false });
+  return new MeshBasicMaterial({
+    color,
+    transparent: true,
+    opacity,
+    depthWrite: false,
+    toneMapped: false,
+  });
 }
 
-function perKind(build: (kind: HotspotKind) => MeshBasicMaterial): Record<HotspotKind, MeshBasicMaterial> {
+function perKind(
+  build: (kind: HotspotKind) => MeshBasicMaterial,
+): Record<HotspotKind, MeshBasicMaterial> {
   return {
     door: build("door"),
     product: build("product"),
@@ -66,7 +74,7 @@ function getShared(): Shared {
 function phaseFor(id: string): number {
   let h = 0;
   for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0;
-  return (h & 0xffff) / 0xffff * Math.PI * 2;
+  return ((h & 0xffff) / 0xffff) * Math.PI * 2;
 }
 
 /** Ground ring under an interactable. No label: the HUD names it. */

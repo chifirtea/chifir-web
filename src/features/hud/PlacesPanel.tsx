@@ -38,8 +38,17 @@ export function PlacesPanel() {
   );
 
   return (
-    <Drawer open={open} onClose={close} side={phone ? "bottom" : "right"} eyebrow="Around the city" title="Places">
-      <div className="sticky top-0 z-10 flex gap-1 border-b border-line bg-ink/95 px-3 py-2 backdrop-blur-md" role="tablist">
+    <Drawer
+      open={open}
+      onClose={close}
+      side={phone ? "bottom" : "right"}
+      eyebrow="Around the city"
+      title="Places"
+    >
+      <div
+        className="sticky top-0 z-10 flex gap-1 border-b border-line bg-ink/95 px-3 py-2 backdrop-blur-md"
+        role="tablist"
+      >
         <TabButton active={tab === "places"} onClick={() => setTab("places")}>
           Places
         </TabButton>
@@ -58,7 +67,15 @@ export function PlacesPanel() {
   );
 }
 
-function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: string }) {
+function TabButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: string;
+}) {
   return (
     <button
       type="button"
@@ -101,7 +118,9 @@ function PlacesTab({
         .map((district) => ({
           district,
           merchants: merchantsInDistrict(index, district.id),
-          lots: index.snapshot.parcels.filter((p) => p.districtId === district.id && p.status === "available"),
+          lots: index.snapshot.parcels.filter(
+            (p) => p.districtId === district.id && p.status === "available",
+          ),
         })),
     [index],
   );
@@ -114,8 +133,14 @@ function PlacesTab({
           <header className="flex items-center justify-between gap-3 px-5 pt-4 pb-2">
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: district.theme.accent }} aria-hidden="true" />
-                <h3 className="font-display truncate text-[16px] font-semibold tracking-tight">{district.name}</h3>
+                <span
+                  className="h-2 w-2 shrink-0 rounded-full"
+                  style={{ background: district.theme.accent }}
+                  aria-hidden="true"
+                />
+                <h3 className="font-display truncate text-[16px] font-semibold tracking-tight">
+                  {district.name}
+                </h3>
               </div>
               <p className="mt-0.5 line-clamp-1 text-[12px] text-fog-3">{district.description}</p>
             </div>
@@ -134,7 +159,10 @@ function PlacesTab({
             {lots.map((lot) => (
               <li key={lot.id} className="flex items-center justify-between gap-3 px-5 py-2.5">
                 <div className="flex min-w-0 items-center gap-3">
-                  <span className="h-2.5 w-2.5 shrink-0 rounded-full border border-dashed border-fog-3" aria-hidden="true" />
+                  <span
+                    className="h-2.5 w-2.5 shrink-0 rounded-full border border-dashed border-fog-3"
+                    aria-hidden="true"
+                  />
                   <span className="text-[13px] text-fog-3">
                     Available · {lot.tier}
                     {lot.sponsored ? " · sponsored slot" : ""}
@@ -183,8 +211,12 @@ function MerchantRow({
           aria-hidden="true"
         />
         <div className="min-w-0 flex-1">
-          <div className="font-display text-[15px] font-semibold tracking-tight">{merchant.name}</div>
-          {merchant.tagline ? <p className="mt-0.5 text-[13px] text-fog-2">{merchant.tagline}</p> : null}
+          <div className="font-display text-[15px] font-semibold tracking-tight">
+            {merchant.name}
+          </div>
+          {merchant.tagline ? (
+            <p className="mt-0.5 text-[13px] text-fog-2">{merchant.tagline}</p>
+          ) : null}
           <div className="mt-1.5 flex flex-wrap gap-1.5">
             {status ? <Badge tone={status.open ? "mint" : "neutral"}>{status.label}</Badge> : null}
             {price ? <Badge>{price}</Badge> : null}
@@ -238,16 +270,27 @@ function formatEventTime(ms: number, now: Date): string {
 function TonightTab({ index, onGo }: { index: CityIndex; onGo: (t: NavTarget) => void }) {
   const now = useMemo(() => new Date(), []);
   const events = useMemo(
-    () => [...index.snapshot.events].sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt)),
+    () =>
+      [...index.snapshot.events].sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt)),
     [index],
   );
   if (events.length === 0) {
-    return <p className="px-5 py-8 text-sm text-fog-3">Nothing scheduled right now. Walk around anyway.</p>;
+    return (
+      <p className="px-5 py-8 text-sm text-fog-3">
+        Nothing scheduled right now. Walk around anyway.
+      </p>
+    );
   }
   return (
     <ul className="pb-4">
       {events.map((event) => (
-        <EventRow key={event.id} event={event} merchant={event.merchantId ? index.merchantsById[event.merchantId] : undefined} now={now} onGo={onGo} />
+        <EventRow
+          key={event.id}
+          event={event}
+          merchant={event.merchantId ? index.merchantsById[event.merchantId] : undefined}
+          now={now}
+          onGo={onGo}
+        />
       ))}
     </ul>
   );
@@ -273,15 +316,28 @@ function EventRow({
   };
   return (
     <li className="border-b border-line px-5 py-3 last:border-b-0">
-      <button type="button" onClick={toggle} aria-expanded={expanded} className="flex w-full items-start gap-3 text-left">
+      <button
+        type="button"
+        onClick={toggle}
+        aria-expanded={expanded}
+        className="flex w-full items-start gap-3 text-left"
+      >
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <Badge tone={phase.tone}>{phase.label}</Badge>
             {merchant ? <span className="text-[12px] text-fog-3">{merchant.name}</span> : null}
           </div>
-          <div className="font-display mt-1.5 text-[15px] font-semibold tracking-tight">{event.title}</div>
+          <div className="font-display mt-1.5 text-[15px] font-semibold tracking-tight">
+            {event.title}
+          </div>
         </div>
-        <ChevronDown className={cn("mt-1 h-4 w-4 shrink-0 text-fog-3 transition-transform", expanded && "rotate-180")} aria-hidden="true" />
+        <ChevronDown
+          className={cn(
+            "mt-1 h-4 w-4 shrink-0 text-fog-3 transition-transform",
+            expanded && "rotate-180",
+          )}
+          aria-hidden="true"
+        />
       </button>
       {expanded ? (
         <div className="mt-2">

@@ -53,7 +53,13 @@ export function useKeyboard(): void {
       }
       if (PREVENT_DEFAULT.has(code)) e.preventDefault();
       if (e.repeat || pressed.has(code)) return;
-      if (FORWARD.has(code) || BACK.has(code) || LEFT.has(code) || RIGHT.has(code) || RUN.has(code)) {
+      if (
+        FORWARD.has(code) ||
+        BACK.has(code) ||
+        LEFT.has(code) ||
+        RIGHT.has(code) ||
+        RUN.has(code)
+      ) {
         pressed.add(code);
         apply();
       }

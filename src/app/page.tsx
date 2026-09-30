@@ -21,14 +21,19 @@ export default async function LandingPage() {
   const index = buildCityIndex(snapshot);
   const now = new Date();
 
-  const placed: Merchant[] = Object.values(index.merchantsById).filter((m) => index.parcelByMerchant[m.id]);
+  const placed: Merchant[] = Object.values(index.merchantsById).filter(
+    (m) => index.parcelByMerchant[m.id],
+  );
   const palettes = placed.map((m) => ({ slug: m.slug, name: m.name, brand: m.brand }));
 
   const events: TonightEvent[] = snapshot.events
     .filter((e) => e.status !== "cancelled" && Date.parse(e.endsAt) > now.getTime())
     .sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt))
     .slice(0, EVENT_COUNT)
-    .map((event) => ({ event, merchant: event.merchantId ? index.merchantsById[event.merchantId] : undefined }));
+    .map((event) => ({
+      event,
+      merchant: event.merchantId ? index.merchantsById[event.merchantId] : undefined,
+    }));
 
   const merchants = [...placed]
     .sort((a, b) => {
@@ -40,11 +45,18 @@ export default async function LandingPage() {
 
   return (
     <main className="min-h-screen bg-night text-fog">
-      <section className={`relative isolate flex min-h-svh flex-col overflow-hidden ${styles.hero}`}>
-        <Skyline palettes={palettes} className="pointer-events-none absolute inset-x-0 bottom-0 z-0 h-[44%] min-h-[220px] w-full" />
+      <section
+        className={`relative isolate flex min-h-svh flex-col overflow-hidden ${styles.hero}`}
+      >
+        <Skyline
+          palettes={palettes}
+          className="pointer-events-none absolute inset-x-0 bottom-0 z-0 h-[220px] w-full sm:h-[44%]"
+        />
         <div
           className="pointer-events-none absolute inset-x-0 bottom-0 z-0 h-[52%]"
-          style={{ background: "linear-gradient(180deg, rgba(15,17,22,0) 0%, rgba(15,17,22,0.35) 100%)" }}
+          style={{
+            background: "linear-gradient(180deg, rgba(15,17,22,0) 0%, rgba(15,17,22,0.35) 100%)",
+          }}
           aria-hidden="true"
         />
 
@@ -57,7 +69,7 @@ export default async function LandingPage() {
           </a>
         </header>
 
-        <div className="relative z-10 mx-auto flex w-full max-w-6xl flex-1 flex-col justify-center px-4 pt-12 pb-[46%] sm:pb-[30%] lg:pb-[22%]">
+        <div className="relative z-10 mx-auto flex w-full max-w-6xl flex-1 flex-col justify-center px-4 pt-12 pb-[236px] sm:pb-[30%] lg:pb-[22%]">
           <div className="max-w-3xl">
             <div className={`eyebrow ${styles.rise}`}>A city of real places</div>
             <h1
@@ -66,9 +78,12 @@ export default async function LandingPage() {
             >
               What should we do tonight?
             </h1>
-            <p className={`mt-5 max-w-xl text-[17px] leading-relaxed text-fog-2 ${styles.rise}`} style={{ animationDelay: "90ms" }}>
-              Real restaurants, stores and events, built as a city you can walk through. Ask for what you want, or
-              just wander in.
+            <p
+              className={`mt-5 max-w-xl text-[17px] leading-relaxed text-fog-2 ${styles.rise}`}
+              style={{ animationDelay: "90ms" }}
+            >
+              Real restaurants, stores and events, built as a city you can walk through. Ask for
+              what you want, or just wander in.
             </p>
             <div className="mt-8 max-w-2xl">
               <AskTheCity />

@@ -1,6 +1,15 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import { Canvas, useFrame, type RootState } from "@react-three/fiber";
 import { PerformanceMonitor, Preload } from "@react-three/drei";
 import { ACESFilmicToneMapping, PCFSoftShadowMap, SRGBColorSpace } from "three";
@@ -54,37 +63,39 @@ function ReadySignal() {
  * runtime through drei's PerformanceMonitor.
  */
 export function CityCanvas({ children }: { children: ReactNode }) {
-  const [detected, setDetected] = useState<DetectedQuality | null>(null);
+  // Reading the device is side-effect free as far as React is concerned, so it can happen in the
+  // initializer; the context-creation attributes below need it on the very first render.
+  const [detected] = useState<DetectedQuality>(detectInitialQuality);
   const settings = useQuality();
 
-  // Layout effect (not a render-phase side effect): the quality store may already have HUD
-  // subscribers, and React forbids updating them from another component's render.
+  // Store and analytics writes belong in an effect: the quality store may already have HUD
+  // subscribers, and React forbids updating them from another component's render. R3F re-applies
+  // `dpr`/`shadows` when the configured preset lands one render later.
   useLayoutEffect(() => {
-    const d = detectInitialQuality();
-    useQualityStore.getState().configure(d.tier, d.mobile);
-    setAnalyticsDevice(d.gpu ? { mobile: d.mobile, tier: d.tier, gpu: d.gpu } : { mobile: d.mobile, tier: d.tier });
-    setDetected(d);
-  }, []);
+    useQualityStore.getState().configure(detected.tier, detected.mobile);
+    setAnalyticsDevice(
+      detected.gpu
+        ? { mobile: detected.mobile, tier: detected.tier, gpu: detected.gpu }
+        : { mobile: detected.mobile, tier: detected.tier },
+    );
+  }, [detected]);
 
   const handleDecline = useCallback(() => {
     setQualityTier(lowerTier(useQualityStore.getState().settings.tier));
   }, []);
 
   const handleIncline = useCallback(() => {
-    if (!detected) return;
     const next = higherTier(useQualityStore.getState().settings.tier);
     // Never climb above what the device was judged capable of at start.
     if (rank(next) <= rank(detected.tier)) setQualityTier(next);
   }, [detected]);
 
-  if (!detected) return null;
-
-  const gl = {
+  const [gl] = useState(() => ({
     antialias: !(detected.mobile && detected.tier === "low"),
     powerPreference: "high-performance" as const,
     alpha: false,
     stencil: false,
-  };
+  }));
 
   return (
     <Canvas

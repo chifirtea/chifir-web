@@ -5,7 +5,13 @@ import styles from "./landing.module.css";
  * CSS/SVG-only dusk skyline of the actual seeded city. Each merchant is a building in its brand
  * colours with a lit sign; fillers sit between them. No WebGL on the landing page.
  */
-export function Skyline({ palettes, className }: { palettes: SkylinePalette[]; className?: string }) {
+export function Skyline({
+  palettes,
+  className,
+}: {
+  palettes: SkylinePalette[];
+  className?: string;
+}) {
   const sky = buildSkyline(palettes);
   const { width, height } = sky;
   return (
@@ -27,11 +33,29 @@ export function Skyline({ palettes, className }: { palettes: SkylinePalette[]; c
             x={b.x + 4}
             y={height - b.h + 8}
           >
-            <rect x={WINDOW_TILE.x} y={WINDOW_TILE.y} width={WINDOW_TILE.ww} height={WINDOW_TILE.wh} fill={b.window} opacity={b.windowOpacity} />
+            <rect
+              x={WINDOW_TILE.x}
+              y={WINDOW_TILE.y}
+              width={WINDOW_TILE.ww}
+              height={WINDOW_TILE.wh}
+              fill={b.window}
+              opacity={b.windowOpacity}
+            />
           </pattern>
         ))}
-        <pattern id="w-back" width={WINDOW_TILE.w} height={WINDOW_TILE.h} patternUnits="userSpaceOnUse">
-          <rect x={WINDOW_TILE.x} y={WINDOW_TILE.y} width={WINDOW_TILE.ww} height={WINDOW_TILE.wh} fill="#d8c8ac" />
+        <pattern
+          id="w-back"
+          width={WINDOW_TILE.w}
+          height={WINDOW_TILE.h}
+          patternUnits="userSpaceOnUse"
+        >
+          <rect
+            x={WINDOW_TILE.x}
+            y={WINDOW_TILE.y}
+            width={WINDOW_TILE.ww}
+            height={WINDOW_TILE.wh}
+            fill="#d8c8ac"
+          />
         </pattern>
         <radialGradient id="lamp" cx="50%" cy="50%" r="50%">
           <stop offset="0%" stopColor="#ffc46b" stopOpacity="0.55" />
@@ -54,7 +78,14 @@ export function Skyline({ palettes, className }: { palettes: SkylinePalette[]; c
       {sky.back.map((b) => (
         <g key={b.id}>
           <rect x={b.x} y={height - b.h} width={b.w} height={b.h} fill={b.facade} />
-          <rect x={b.x + 4} y={height - b.h + 10} width={b.w - 8} height={b.h - 10} fill="url(#w-back)" opacity={b.windowOpacity} />
+          <rect
+            x={b.x + 4}
+            y={height - b.h + 10}
+            width={b.w - 8}
+            height={b.h - 10}
+            fill="url(#w-back)"
+            opacity={b.windowOpacity}
+          />
         </g>
       ))}
 
@@ -65,12 +96,25 @@ export function Skyline({ palettes, className }: { palettes: SkylinePalette[]; c
           <g key={b.id}>
             <rect x={b.x} y={top} width={b.w} height={b.h} fill={b.facade} />
             <rect x={b.x} y={top} width={b.w} height={3} fill="#ffffff" opacity="0.06" />
-            <rect x={b.x + 4} y={top + 8} width={b.w - 8} height={b.h - 8} fill={`url(#w-${b.id})`} />
+            <rect
+              x={b.x + 4}
+              y={top + 8}
+              width={b.w - 8}
+              height={b.h - 8}
+              fill={`url(#w-${b.id})`}
+            />
             {b.dark.map((d, i) => (
               <rect key={i} x={d.x} y={d.y} width={d.w} height={d.h} fill={b.facade} />
             ))}
             {b.flicker ? (
-              <rect className={styles.flicker} x={b.flicker.x} y={b.flicker.y} width={WINDOW_TILE.ww} height={WINDOW_TILE.wh} fill={b.window} />
+              <rect
+                className={styles.flicker}
+                x={b.flicker.x}
+                y={b.flicker.y}
+                width={WINDOW_TILE.ww}
+                height={WINDOW_TILE.wh}
+                fill={b.window}
+              />
             ) : null}
             {b.sign ? (
               <g>
@@ -84,8 +128,22 @@ export function Skyline({ palettes, className }: { palettes: SkylinePalette[]; c
                   opacity="0.5"
                   style={{ mixBlendMode: "screen" }}
                 />
-                <rect x={b.sign.x} y={b.sign.y} width={b.sign.w} height={b.sign.h} rx={2} fill={b.sign.color} />
-                <rect x={b.sign.x + 2} y={b.sign.y + 1.5} width={b.sign.w - 4} height={1.5} rx={1} fill="url(#signglow)" />
+                <rect
+                  x={b.sign.x}
+                  y={b.sign.y}
+                  width={b.sign.w}
+                  height={b.sign.h}
+                  rx={2}
+                  fill={b.sign.color}
+                />
+                <rect
+                  x={b.sign.x + 2}
+                  y={b.sign.y + 1.5}
+                  width={b.sign.w - 4}
+                  height={1.5}
+                  rx={1}
+                  fill="url(#signglow)"
+                />
               </g>
             ) : null}
           </g>

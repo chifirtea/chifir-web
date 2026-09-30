@@ -71,7 +71,10 @@ export function formatClock(hhmm: string): string {
   return m === 0 ? `${h12} ${suffix}` : `${h12}:${String(m).padStart(2, "0")} ${suffix}`;
 }
 
-export function openNowStatus(hours: OpeningHours | undefined, now: Date = new Date()): OpenStatus | null {
+export function openNowStatus(
+  hours: OpeningHours | undefined,
+  now: Date = new Date(),
+): OpenStatus | null {
   if (!hours) return null;
   const { day, minutes } = localClock(now, hours.timezone);
   const today = WEEKDAYS[day]!;
@@ -112,7 +115,10 @@ export function openNowStatus(hours: OpeningHours | undefined, now: Date = new D
 }
 
 /** The phrase alone, or null when the merchant publishes no hours. */
-export function openNowLabel(hours: OpeningHours | undefined, now: Date = new Date()): string | null {
+export function openNowLabel(
+  hours: OpeningHours | undefined,
+  now: Date = new Date(),
+): string | null {
   return openNowStatus(hours, now)?.label ?? null;
 }
 

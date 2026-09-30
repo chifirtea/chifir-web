@@ -1,9 +1,8 @@
 "use client";
 
 import { useEffect, type ReactNode } from "react";
-import { useQualityStore } from "@/engine/canvas/qualityStore";
 import { useWorldStore } from "@/engine/store/worldStore";
-import { flush, setAnalyticsDevice, track } from "@/lib/analytics/client";
+import { flush, track } from "@/lib/analytics/client";
 import { usePerfSampler } from "./usePerfSampler";
 
 const HEARTBEAT_S = 30;
@@ -20,19 +19,7 @@ export function AnalyticsProvider({ children }: { children: ReactNode }) {
     const startedAt = performance.now();
     const cleanups: Array<() => void> = [];
 
-    // Device context (attached to every record). Updated when the engine settles on a tier.
-    const describeDevice = () =>
-      setAnalyticsDevice({
-        mobile: typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches,
-        tier: useQualityStore.getState().settings.tier,
-        ua: navigator.userAgent.slice(0, 300),
-      });
-    describeDevice();
-    cleanups.push(
-      useQualityStore.subscribe((s, prev) => {
-        if (s.settings.tier !== prev.settings.tier) describeDevice();
-      }),
-    );
+    // Device context (tier, mobile, gpu) is attached by CityCanvas at detection time.
 
     track("app_loaded", { path: window.location.pathname });
     track("city_load_started", {});
@@ -61,7 +48,10 @@ export function AnalyticsProvider({ children }: { children: ReactNode }) {
     // Heartbeat while visible.
     const heartbeat = setInterval(() => {
       if (document.visibilityState !== "visible") return;
-      track("session_heartbeat", { seconds: HEARTBEAT_S, location: useWorldStore.getState().location.kind });
+      track("session_heartbeat", {
+        seconds: HEARTBEAT_S,
+        location: useWorldStore.getState().location.kind,
+      });
     }, HEARTBEAT_S * 1000);
     cleanups.push(() => clearInterval(heartbeat));
 
@@ -71,11 +61,19 @@ export function AnalyticsProvider({ children }: { children: ReactNode }) {
       const key = message.slice(0, 200);
       if (seen.size >= MAX_ERRORS_PER_SESSION || seen.has(key)) return;
       seen.add(key);
-      track("error_client", { message: message.slice(0, 500), ...(stack ? { stack: stack.slice(0, 2000) } : {}), where });
+      track("error_client", {
+        message: message.slice(0, 500),
+        ...(stack ? { stack: stack.slice(0, 2000) } : {}),
+        where,
+      });
     };
     const onError = (e: ErrorEvent) => {
       const err: unknown = e.error;
-      report(e.message || "Unknown error", err instanceof Error ? err.stack : undefined, "window.error");
+      report(
+        e.message || "Unknown error",
+        err instanceof Error ? err.stack : undefined,
+        "window.error",
+      );
     };
     const onRejection = (e: PromiseRejectionEvent) => {
       const reason: unknown = e.reason;

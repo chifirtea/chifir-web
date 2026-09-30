@@ -49,7 +49,8 @@ export function LocationBadge() {
     track("district_entered", { districtId });
   }, [districtId, location.kind]);
 
-  const merchant = location.kind === "interior" ? index?.merchantsById[location.merchantId] : undefined;
+  const merchant =
+    location.kind === "interior" ? index?.merchantsById[location.merchantId] : undefined;
   const district = districtId ? index?.districtsById[districtId] : undefined;
 
   const plate: Plate = merchant
@@ -74,7 +75,8 @@ export function LocationBadge() {
         className="relative rounded-[10px] px-4 py-2 shadow-sign"
         style={{
           background: plate.background,
-          backgroundImage: "linear-gradient(180deg, rgba(255,255,255,0.09), rgba(255,255,255,0) 55%)",
+          backgroundImage:
+            "linear-gradient(180deg, rgba(255,255,255,0.09), rgba(255,255,255,0) 55%)",
           color: plate.text,
           transition: "background-color 400ms ease, color 400ms ease",
         }}
@@ -106,4 +108,9 @@ export function LocationBadge() {
   );
 }
 
-const RIVETS = ["top-[4px] left-[4px]", "top-[4px] right-[4px]", "bottom-[4px] left-[4px]", "bottom-[4px] right-[4px]"];
+const RIVETS = [
+  "top-[4px] left-[4px]",
+  "top-[4px] right-[4px]",
+  "bottom-[4px] left-[4px]",
+  "bottom-[4px] right-[4px]",
+];

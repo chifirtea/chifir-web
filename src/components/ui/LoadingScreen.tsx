@@ -22,7 +22,11 @@ export interface LoadingScreenProps {
 }
 
 /** Full-screen night sky with a silhouette of the city, the wordmark, and one rotating tip. */
-export function LoadingScreen({ label = "Loading the city", progress, hidden = false }: LoadingScreenProps) {
+export function LoadingScreen({
+  label = "Loading the city",
+  progress,
+  hidden = false,
+}: LoadingScreenProps) {
   const [tip, setTip] = useState(0);
   useEffect(() => {
     const t = setInterval(() => setTip((i) => (i + 1) % TIPS.length), TIP_INTERVAL_MS);
@@ -48,16 +52,24 @@ export function LoadingScreen({ label = "Loading the city", progress, hidden = f
       <div className="relative z-10 flex flex-col items-center px-4 text-center">
         <div className="eyebrow">the city</div>
         <div className="font-display mt-1 text-5xl font-bold tracking-tight">Chifir</div>
-        <div className="mt-7 h-[3px] w-56 overflow-hidden rounded-full bg-white/10" aria-hidden="true">
+        <div
+          className="mt-7 h-[3px] w-56 overflow-hidden rounded-full bg-white/10"
+          aria-hidden="true"
+        >
           {pct === undefined ? (
             <div className={styles.shimmer} />
           ) : (
-            <div className="h-full rounded-full bg-sodium transition-[width] duration-300" style={{ width: `${pct}%` }} />
+            <div
+              className="h-full rounded-full bg-sodium transition-[width] duration-300"
+              style={{ width: `${pct}%` }}
+            />
           )}
         </div>
         <p className="mt-4 text-[14px] text-fog-2">
           {label}
-          {pct !== undefined ? <span className="tabular text-fog-3"> · {Math.round(pct)}%</span> : null}
+          {pct !== undefined ? (
+            <span className="tabular text-fog-3"> · {Math.round(pct)}%</span>
+          ) : null}
         </p>
         <p key={tip} className={cn("mt-1 text-[13px] text-fog-3", styles.tip)}>
           {TIPS[tip]}
@@ -69,9 +81,20 @@ export function LoadingScreen({ label = "Loading the city", progress, hidden = f
 
 // A generic skyline (no merchant data): the landing page draws the real one.
 const BUILDINGS: Array<[x: number, w: number, h: number]> = [
-  [0, 90, 120], [96, 60, 180], [162, 110, 90], [280, 70, 220], [356, 120, 140], [484, 80, 260],
-  [570, 100, 110], [678, 64, 190], [748, 140, 150], [896, 76, 240], [980, 110, 100], [1098, 90, 170],
-  [1196, 130, 130], [1334, 106, 200],
+  [0, 90, 120],
+  [96, 60, 180],
+  [162, 110, 90],
+  [280, 70, 220],
+  [356, 120, 140],
+  [484, 80, 260],
+  [570, 100, 110],
+  [678, 64, 190],
+  [748, 140, 150],
+  [896, 76, 240],
+  [980, 110, 100],
+  [1098, 90, 170],
+  [1196, 130, 130],
+  [1334, 106, 200],
 ];
 
 function Silhouette() {
@@ -94,8 +117,24 @@ function Silhouette() {
       {BUILDINGS.map(([x, w, h], i) => (
         <g key={i}>
           <rect x={x} y={300 - h} width={w} height={h} fill={i % 3 === 0 ? "#171a23" : "#1c2030"} />
-          <rect x={x + 4} y={300 - h + 8} width={w - 8} height={h - 8} fill="url(#ls-w)" opacity={i % 2 ? 0.35 : 0.55} />
-          {i % 4 === 1 ? <rect x={x + 8} y={300 - h + 12} width={5} height={7} fill="#ffc46b" className={styles.flicker} /> : null}
+          <rect
+            x={x + 4}
+            y={300 - h + 8}
+            width={w - 8}
+            height={h - 8}
+            fill="url(#ls-w)"
+            opacity={i % 2 ? 0.35 : 0.55}
+          />
+          {i % 4 === 1 ? (
+            <rect
+              x={x + 8}
+              y={300 - h + 12}
+              width={5}
+              height={7}
+              fill="#ffc46b"
+              className={styles.flicker}
+            />
+          ) : null}
         </g>
       ))}
       <rect x="0" y="288" width="1440" height="12" fill="#0b0c10" />

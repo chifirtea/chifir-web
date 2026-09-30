@@ -33,7 +33,10 @@ export function AskTheCity() {
 
   return (
     <div className={styles.rise} style={{ animationDelay: "120ms" }}>
-      <form onSubmit={onSubmit} className="sign flex items-center gap-2 p-2 focus-within:border-sodium/60">
+      <form
+        onSubmit={onSubmit}
+        className="sign flex items-center gap-2 p-2 focus-within:border-sodium/60"
+      >
         <label htmlFor="ask" className="sr-only">
           What should we do tonight?
         </label>

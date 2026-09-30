@@ -14,7 +14,8 @@ export function useMediaQuery(query: string, serverDefault = false): boolean {
     [query],
   );
   const getSnapshot = useCallback(
-    () => (typeof window.matchMedia === "function" ? window.matchMedia(query).matches : serverDefault),
+    () =>
+      typeof window.matchMedia === "function" ? window.matchMedia(query).matches : serverDefault,
     [query, serverDefault],
   );
   const getServerSnapshot = useCallback(() => serverDefault, [serverDefault]);

@@ -159,7 +159,11 @@ export function FollowCamera() {
         orbit.sinceLook = 0;
       }
       if (zoom !== 0) {
-        orbit.distance = clamp(orbit.distance + zoom * ZOOM_SENSITIVITY, DISTANCE_MIN, DISTANCE_MAX);
+        orbit.distance = clamp(
+          orbit.distance + zoom * ZOOM_SENSITIVITY,
+          DISTANCE_MIN,
+          DISTANCE_MAX,
+        );
       }
     }
 

@@ -43,7 +43,9 @@ describe("tierFromSignals", () => {
         gpu: "ANGLE (Intel, Intel(R) Iris(R) Xe Graphics Direct3D11 vs_5_0 ps_5_0, D3D11)",
       }),
     ).toBe("high");
-    expect(tierFromSignals({ mobile: false, cores: 16, gpu: "Intel(R) Arc(TM) A770" })).toBe("high");
+    expect(tierFromSignals({ mobile: false, cores: 16, gpu: "Intel(R) Arc(TM) A770" })).toBe(
+      "high",
+    );
   });
 
   it("drops desktops with 4 or fewer cores to medium", () => {
@@ -85,9 +87,9 @@ describe("tierFromSignals", () => {
 
   it("forces low on software rasterisers regardless of form factor", () => {
     expect(tierFromSignals({ mobile: false, cores: 16, gpu: "Google SwiftShader" })).toBe("low");
-    expect(tierFromSignals({ mobile: false, cores: 16, gpu: "llvmpipe (LLVM 15.0.7, 256 bits)" })).toBe(
-      "low",
-    );
+    expect(
+      tierFromSignals({ mobile: false, cores: 16, gpu: "llvmpipe (LLVM 15.0.7, 256 bits)" }),
+    ).toBe("low");
     expect(tierFromSignals({ mobile: true, gpu: "Microsoft Basic Render Driver" })).toBe("low");
   });
 });
@@ -101,19 +103,26 @@ describe("isMobileDevice", () => {
       ),
     ).toBe(true);
     expect(
-      isMobileDevice("Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36", 5),
+      isMobileDevice(
+        "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36",
+        5,
+      ),
     ).toBe(true);
   });
 
   it("recognises iPadOS masquerading as a Mac by its touch points", () => {
-    const ua = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Safari/605.1.15";
+    const ua =
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Safari/605.1.15";
     expect(isMobileDevice(ua, 5)).toBe(true);
     expect(isMobileDevice(ua, 0)).toBe(false);
   });
 
   it("treats desktops (including touch-screen laptops) as not mobile", () => {
     expect(
-      isMobileDevice("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36", 10),
+      isMobileDevice(
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
+        10,
+      ),
     ).toBe(false);
     expect(isMobileDevice("Mozilla/5.0 (X11; Linux x86_64) Firefox/121.0", 0)).toBe(false);
   });

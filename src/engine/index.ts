@@ -5,7 +5,12 @@
 
 // Canvas
 export { CityCanvas } from "./canvas/CityCanvas";
-export { detectInitialQuality, isMobileDevice, readGpuRenderer, tierFromSignals } from "./canvas/detectQuality";
+export {
+  detectInitialQuality,
+  isMobileDevice,
+  readGpuRenderer,
+  tierFromSignals,
+} from "./canvas/detectQuality";
 export type { DetectedQuality, QualitySignals } from "./canvas/detectQuality";
 
 // Input
@@ -30,7 +35,13 @@ export {
   wrapAngle,
 } from "./player/PlayerController";
 export type { PlayerInput, PlayerMotion } from "./player/PlayerController";
-export { CAMERA_PRIORITY, FollowCamera, getCameraPitch, getCameraYaw, setCameraYaw } from "./player/FollowCamera";
+export {
+  CAMERA_PRIORITY,
+  FollowCamera,
+  getCameraPitch,
+  getCameraYaw,
+  setCameraYaw,
+} from "./player/FollowCamera";
 export { Avatar, DEFAULT_AVATAR, NpcAvatar } from "./player/Avatar";
 export type { NpcAvatarProps } from "./player/Avatar";
 export { Player, PLAYER_PRIORITY } from "./player/Player";

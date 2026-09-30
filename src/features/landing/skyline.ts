@@ -117,7 +117,6 @@ export function buildSkyline(palettes: SkylinePalette[], width = 1440, height = 
 
   // Front row: merchants interleaved with fillers, merchants pulled toward the centre.
   const merchantOrder = [...palettes];
-  const centre = width / 2;
   const slots: Array<SkylinePalette | null> = [];
   const count = Math.max(merchantOrder.length * 2 + 3, 14);
   for (let s = 0; s < count; s++) slots.push(null);
@@ -165,11 +164,21 @@ export function buildSkyline(palettes: SkylinePalette[], width = 1440, height = 
       if (vertical) {
         const c = Math.floor(random() * cols);
         const span = 1 + Math.floor(random() * 2);
-        dark.push({ x: x + 4 + c * WINDOW_TILE.w, y: top + 8, w: span * WINDOW_TILE.w, h: rows * WINDOW_TILE.h });
+        dark.push({
+          x: x + 4 + c * WINDOW_TILE.w,
+          y: top + 8,
+          w: span * WINDOW_TILE.w,
+          h: rows * WINDOW_TILE.h,
+        });
       } else {
         const r = Math.floor(random() * rows);
         const span = 1 + Math.floor(random() * 2);
-        dark.push({ x: x + 4, y: top + 8 + r * WINDOW_TILE.h, w: cols * WINDOW_TILE.w, h: span * WINDOW_TILE.h });
+        dark.push({
+          x: x + 4,
+          y: top + 8 + r * WINDOW_TILE.h,
+          w: cols * WINDOW_TILE.w,
+          h: span * WINDOW_TILE.h,
+        });
       }
     }
 
@@ -192,7 +201,10 @@ export function buildSkyline(palettes: SkylinePalette[], width = 1440, height = 
     if (merchant) {
       const signW = Math.min(w - 16, 24 + merchant.name.length * 5);
       building.sign = {
-        color: luminance(merchant.brand.accent) > 0.35 ? merchant.brand.accent : merchant.brand.secondary,
+        color:
+          luminance(merchant.brand.accent) > 0.35
+            ? merchant.brand.accent
+            : merchant.brand.secondary,
         x: x + Math.round((w - signW) / 2),
         y: top + 22,
         w: signW,

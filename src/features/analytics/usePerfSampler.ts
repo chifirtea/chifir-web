@@ -35,7 +35,11 @@ export function usePerfSampler(intervalMs = DEFAULT_INTERVAL_MS): void {
         const { settings } = useQualityStore.getState();
         const rawDpr = typeof window.devicePixelRatio === "number" ? window.devicePixelRatio : 1;
         const dpr = Math.round(Math.min(rawDpr, settings.dpr[1]) * 100) / 100;
-        track("perf_sample", { fps: Math.round((frames * 1000) / elapsed), dpr, tier: settings.tier });
+        track("perf_sample", {
+          fps: Math.round((frames * 1000) / elapsed),
+          dpr,
+          tier: settings.tier,
+        });
       }
       resetWindow(t);
     };

@@ -4,6 +4,7 @@ import { Map as MapIcon } from "lucide-react";
 import { ConciergeButton } from "@/features/ai/ConciergeButton";
 import { AuthMenu } from "@/features/auth/AuthMenu";
 import { CartButton } from "@/features/cart/CartButton";
+import { useInputStore } from "@/engine/input/inputStore";
 import { useWorldStore } from "@/engine/store/worldStore";
 import { ControlsHint } from "./ControlsHint";
 import { DevStats } from "./DevStats";
@@ -19,14 +20,19 @@ const IS_DEV = process.env.NODE_ENV !== "production";
  * every control opts back in, so the world stays draggable between them.
  */
 export function Hud() {
-  const touch = useIsTouch();
+  // Touch controls (joystick + run button) live in the bottom 170px; keep the prompt above them.
+  const touchStore = useInputStore((s) => s.touch);
+  const coarse = useIsTouch();
+  const touch = touchStore || coarse;
   return (
     <div
       className="pointer-events-none fixed inset-0 z-20 flex flex-col justify-between"
       style={{
         paddingTop: "max(12px, env(safe-area-inset-top))",
         paddingRight: "max(12px, env(safe-area-inset-right))",
-        paddingBottom: touch ? "max(132px, calc(env(safe-area-inset-bottom) + 120px))" : "max(20px, env(safe-area-inset-bottom))",
+        paddingBottom: touch
+          ? "max(132px, calc(env(safe-area-inset-bottom) + 120px))"
+          : "max(20px, env(safe-area-inset-bottom))",
         paddingLeft: "max(12px, env(safe-area-inset-left))",
       }}
     >
@@ -51,7 +57,10 @@ export function Hud() {
       </div>
 
       {IS_DEV ? (
-        <div className="absolute right-3 bottom-3" style={{ marginBottom: "env(safe-area-inset-bottom)" }}>
+        <div
+          className="absolute right-3 bottom-3"
+          style={{ marginBottom: "env(safe-area-inset-bottom)" }}
+        >
           <DevStats />
         </div>
       ) : null}
