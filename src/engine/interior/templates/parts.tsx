@@ -141,6 +141,31 @@ export function Room({ room, brand, quality, floor, wallColor, bandColor, panels
   const panelMat = tinted("#fff3de", { emissive: "#ffe6c2", emissiveIntensity: 1.5, roughness: 0.6 });
   const accentGlow = tinted(brand.accent, { emissive: brand.accent, emissiveIntensity: 0.9, roughness: 0.5 });
   const shadows = quality === "high";
+  // Wall sconces: a warm bulb and a soft light wash every ~3.5 m so bare walls read as lit plaster
+  // rather than a void. Emissive only (no extra real lights).
+  const sconces = useMemo(() => {
+    const bulbs: InstanceTransform[] = [];
+    const washes: InstanceTransform[] = [];
+    const y = 2.25;
+    const along = (count: number, at: (i: number) => { x: number; z: number; yaw: number }) => {
+      for (let i = 0; i < count; i++) {
+        const { x, z, yaw } = at(i);
+        bulbs.push({ x, y, z, sx: 0.16, sy: 0.16, sz: 0.16 });
+        washes.push({ x, y: y + 0.7, z, yaw, sx: 1.6, sy: 2.4, sz: 1 });
+      }
+    };
+    const nBack = Math.max(2, Math.round(W / 3.5));
+    along(nBack, (i) => ({ x: -W / 2 + (W / nBack) * (i + 0.5), z: -D / 2 + 0.08, yaw: 0 }));
+    const nSide = Math.max(2, Math.round(D / 3.5));
+    along(nSide, (i) => ({ x: -W / 2 + 0.08, z: -D / 2 + (D / nSide) * (i + 0.5), yaw: Math.PI / 2 }));
+    along(nSide, (i) => ({ x: W / 2 - 0.08, z: -D / 2 + (D / nSide) * (i + 0.5), yaw: -Math.PI / 2 }));
+    return { bulbs, washes };
+  }, [W, D]);
+  const bulbMat = tinted("#ffe9c4", { emissive: "#ffcf8a", emissiveIntensity: 3.2, roughness: 0.4 });
+  const washMat = useMemo(
+    () => new THREE.MeshStandardMaterial({ color: "#ffd9a8", emissive: new THREE.Color("#ffbf78"), emissiveIntensity: 0.55, transparent: true, opacity: 0.5, roughness: 1, depthWrite: false }),
+    [],
+  );
 
   return (
     <group>
@@ -150,6 +175,8 @@ export function Room({ room, brand, quality, floor, wallColor, bandColor, panels
       <StaticInstances geometry={GEO.box} material={tinted(band, { roughness: 0.7 })} items={bands} />
       <StaticInstances geometry={GEO.box} material={accentGlow} items={doorFrame} />
       <StaticInstances geometry={GEO.plane} material={panelMat} items={lightPanels} />
+      <StaticInstances geometry={GEO.sphere} material={bulbMat} items={sconces.bulbs} />
+      <StaticInstances geometry={GEO.plane} material={washMat} items={sconces.washes} />
       <mesh geometry={GEO.box} material={tinted("#2a2c33", { roughness: 0.95 })} position={[0, 0.01, D / 2 + 0.9]} scale={[DOOR_GAP + 0.2, 0.02, 1.8]} />
     </group>
   );

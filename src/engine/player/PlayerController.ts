@@ -20,7 +20,10 @@ export const PLAYER_RADIUS = 0.4;
 export const WALK_SPEED = 4;
 export const RUN_SPEED = 7;
 /** Longest simulated step. Also what makes the per-axis collision tunnelling-proof. */
-export const MAX_DT = 0.05;
+/** Frames longer than this are clamped so a hitch never becomes a leap. */
+export const MAX_DT = 0.1;
+/** Collision integration step; the resolver is exact for moves shorter than this × RUN_SPEED. */
+export const SUBSTEP = 0.05;
 /** Yaw approach rate toward the movement direction (rad/s, exponential). */
 export const TURN_RATE = 10;
 /** Exponential velocity approach rates (1/s). Braking is snappier than starting. */
@@ -58,6 +61,10 @@ export function stepPlayer(
   motion: PlayerMotion = defaultMotion,
 ): void {
   dt = dt > MAX_DT ? MAX_DT : dt < 0 ? 0 : dt;
+  // Integrate in sub-steps no longer than SUBSTEP so a slow frame (clamped to MAX_DT) never moves
+  // the capsule further than the collision resolver can handle in one pass.
+  const steps = dt > SUBSTEP ? Math.ceil(dt / SUBSTEP) : 1;
+  const h = dt / steps;
 
   // Clamp the stick to the unit disc (keyboard diagonals come in at length √2).
   let ix = input.moveX;
@@ -100,10 +107,12 @@ export function stepPlayer(
 
   // Move and resolve one axis at a time so the blocked component is removed and the free one
   // is kept: that is what makes the player slide along walls and around corners.
-  x += motion.vx * dt;
-  x = resolveCircleAABB(x, z, PLAYER_RADIUS, colliders, "x").x;
-  z += motion.vz * dt;
-  z = resolveCircleAABB(x, z, PLAYER_RADIUS, colliders, "z").z;
+  for (let i = 0; i < steps; i++) {
+    x += motion.vx * h;
+    x = resolveCircleAABB(x, z, PLAYER_RADIUS, colliders, "x").x;
+    z += motion.vz * h;
+    z = resolveCircleAABB(x, z, PLAYER_RADIUS, colliders, "z").z;
+  }
 
   rig.x = x;
   rig.z = z;

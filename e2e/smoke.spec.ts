@@ -1,5 +1,11 @@
 import { expect, test } from "@playwright/test";
 
+declare global {
+  interface Window {
+    __chifirDebug?: { inspectFirstProduct: (merchantId?: string) => boolean };
+  }
+}
+
 /**
  * End-to-end slice in static mode: landing → city → walk → enter a store → inspect a product →
  * add to cart → demo checkout → order page. Selectors rely on data-testid hooks in the HUD.
@@ -24,38 +30,45 @@ test("deep link teleports to a merchant and the door prompt appears", async ({ p
 });
 
 test("enter a store, inspect a product, add to cart, complete demo checkout", async ({ page }) => {
-  await page.goto("/city?to=ember-and-oak");
+  test.setTimeout(180_000);
+  // Low quality keeps software-rendered CI browsers responsive; real devices auto-detect.
+  await page.goto("/city?to=ember-and-oak&quality=low");
   await expect(page.getByTestId("city-ready")).toBeVisible({ timeout: 60_000 });
-  await expect(page.getByTestId("interaction-prompt")).toContainText(/enter/i, { timeout: 20_000 });
-  await page.getByTestId("interaction-prompt").click();
+  const prompt = page.getByTestId("interaction-prompt");
+  await expect(prompt).toContainText(/enter/i, { timeout: 20_000 });
+  await prompt.click();
   await expect(page.getByTestId("location-badge")).toContainText(/ember & oak/i, { timeout: 20_000 });
 
-  // Products are reachable from the places/menu list without walking to a slot.
-  await page.getByTestId("interaction-prompt").waitFor({ state: "visible", timeout: 20_000 }).catch(() => {});
-  const prompt = page.getByTestId("interaction-prompt");
-  const text = (await prompt.textContent().catch(() => "")) ?? "";
-  if (/look at/i.test(text)) {
-    await prompt.click();
-  } else {
-    // Fall back to the employee panel product list.
-    await page.getByTestId("places-button").click();
-  }
-  await expect(page.getByRole("button", { name: /add to cart/i }).first()).toBeVisible({ timeout: 20_000 });
-  await page.getByRole("button", { name: /add to cart/i }).first().click();
+  // Walking to a display is exercised by the visual check; here the dev-only debug bridge opens
+  // the first purchasable product so the commerce path is deterministic under any frame rate.
+  await page.waitForFunction(() => Boolean(window.__chifirDebug), null, { timeout: 10_000 });
+  const opened = await page.evaluate(() => window.__chifirDebug?.inspectFirstProduct() ?? false);
+  expect(opened, "opened a product panel").toBe(true);
+
+  const add = page.getByRole("button", { name: /add to cart/i }).first();
+  await expect(add).toBeVisible({ timeout: 20_000 });
+  await add.click();
+  await expect(page.getByRole("button", { name: /^added/i })).toBeVisible({ timeout: 5_000 });
+  await page.keyboard.press("Escape");
   await page.getByTestId("cart-button").click();
-  await expect(page.getByRole("button", { name: /get it irl/i })).toBeEnabled({ timeout: 10_000 });
-  await page.getByRole("button", { name: /get it irl/i }).click();
-  await page.getByLabel(/email/i).fill("smoke@example.com");
-  const address = page.getByLabel(/address line 1|street/i);
-  if (await address.isVisible().catch(() => false)) {
-    await address.fill("1 Test St");
-    await page.getByLabel(/city/i).first().fill("Austin");
-    await page.getByLabel(/state|region/i).fill("TX");
-    await page.getByLabel(/postal|zip/i).fill("78701");
+  const getIt = page.getByRole("button", { name: /get it irl/i });
+  await expect(getIt).toBeEnabled({ timeout: 10_000 });
+  await getIt.click();
+
+  await page.getByLabel(/^email/i).fill("smoke@example.com");
+  const street = page.getByLabel(/^street/i);
+  if (await street.isVisible().catch(() => false)) {
+    await street.fill("1 Test St");
+    await page.getByLabel(/^city/i).fill("Austin");
+    await page.getByLabel(/state \/ region/i).fill("TX");
+    await page.getByLabel(/postal code/i).fill("78701");
+    const country = page.getByLabel(/^country/i);
+    if ((await country.inputValue().catch(() => "")) === "") await country.fill("US");
   }
-  await page.getByRole("button", { name: /pay/i }).click();
-  await expect(page).toHaveURL(/\/checkout\/demo/, { timeout: 20_000 });
-  await page.getByRole("button", { name: /pay/i }).click();
-  await expect(page).toHaveURL(/\/orders\//, { timeout: 20_000 });
-  await expect(page.getByText(/paid|on its way|accepted/i).first()).toBeVisible({ timeout: 20_000 });
+  await page.getByRole("button", { name: /^pay/i }).click();
+  await expect(page).toHaveURL(/\/checkout\/demo/, { timeout: 30_000 });
+  await page.getByRole("button", { name: /^pay/i }).click();
+  await expect(page).toHaveURL(/\/orders\//, { timeout: 30_000 });
+  await expect(page.getByText(/paid|on its way|order placed/i).first()).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText(/ember & oak/i).first()).toBeVisible();
 });

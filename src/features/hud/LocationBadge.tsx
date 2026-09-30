@@ -74,7 +74,7 @@ export function LocationBadge() {
       <div
         className="relative rounded-[10px] px-4 py-2 shadow-sign"
         style={{
-          background: plate.background,
+          backgroundColor: plate.background,
           backgroundImage:
             "linear-gradient(180deg, rgba(255,255,255,0.09), rgba(255,255,255,0) 55%)",
           color: plate.text,

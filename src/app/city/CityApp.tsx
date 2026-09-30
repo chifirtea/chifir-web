@@ -26,6 +26,7 @@ import { AnalyticsProvider } from "@/features/analytics/AnalyticsProvider";
 import { ErrorBoundary } from "@/features/analytics/ErrorBoundary";
 import { CartDrawer } from "@/features/cart/CartDrawer";
 import { ProductPanel } from "@/features/catalog/ProductPanel";
+import { DebugBridge } from "@/features/hud/DebugBridge";
 import { Hud } from "@/features/hud/Hud";
 import { PlacesPanel } from "@/features/hud/PlacesPanel";
 import { Toast } from "@/features/hud/Toast";
@@ -177,6 +178,7 @@ export function CityApp({ snapshot, deepLinkTo, ask, checkout }: CityAppProps) {
 
         <VirtualJoystick />
         <Hud />
+        {process.env.NODE_ENV !== "production" ? <DebugBridge /> : null}
 
         <ProductPanel />
         <CartDrawer />

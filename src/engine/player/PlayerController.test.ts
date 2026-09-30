@@ -141,7 +141,7 @@ describe("stepPlayer", () => {
   });
 
   it("never tunnels through a thin wall approached diagonally with dt above the clamp", () => {
-    const thin = box("thin", -100, 5, 100, 5.05);
+    const thin = box("thin", -10_000, 5, 10_000, 5.05);
     const rig = rigAt(1, 0);
     const motion = createMotion();
     for (let i = 0; i < 200; i++) {

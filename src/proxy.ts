@@ -68,9 +68,9 @@ export const config = {
     /*
      * Everything except:
      * - Next internals (_next/static, _next/image) and the favicon
-     * - Stripe webhooks (the raw body must reach the handler untouched)
+     * - API routes: handlers resolve the user themselves (and Stripe needs the raw body untouched)
      * - static assets by extension (images, 3D models, textures, fonts)
      */
-    "/((?!_next/static|_next/image|favicon\\.ico|api/webhooks/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|glb|ktx2|woff2?)$).*)",
+    "/((?!_next/static|_next/image|favicon\\.ico|icon\\.svg|api/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|glb|ktx2|woff2?)$).*)",
   ],
 };

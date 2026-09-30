@@ -80,3 +80,10 @@ the design system.
 - **The UI is signage, not a dashboard.** Street signs, plates and sheets layered over a living night city. Sentence case, plain verbs, the same verb for the same action everywhere ("Take me there", "Guide me", "Get it IRL").
 - **Phones first.** 16 px gutters, 44 px targets, bottom sheets, safe-area insets, a 600 KB gzipped JS budget for `/city`.
 - **Honest by default.** Demo merchants are labelled as such; checkout runs in test mode until it does not.
+
+## QA hooks
+
+- `?quality=low|medium|high` on `/city` forces a render tier (also `localStorage.chifir.quality`).
+- `?to=<merchant-slug>` / `?to=district:<slug>` / `?to=event:<slug>` deep-links to a place; `?ask=<text>` opens the concierge with a prompt.
+- In development builds `window.__chifirDebug` exposes the action bus (`teleportTo`, `enterMerchant`, `inspectFirstProduct`, …) so tests can open panels deterministically.
+- `pnpm e2e` runs the Playwright smoke suite against a dev server on `http://localhost:3100` (set `E2E_BASE_URL` to reuse a running one); `node scripts/visual-check.mjs` takes screenshots and reports console errors.

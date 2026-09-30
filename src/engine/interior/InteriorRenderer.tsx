@@ -82,7 +82,7 @@ function InteriorContent({ index, merchant, parcel }: { index: CityIndex; mercha
         label: `Look at ${product.title}`,
         x: origin.x + slot.x,
         z: origin.z + slot.z,
-        radius: 1.6,
+        radius: 2.2,
         payload: { productId: product.id, merchantId: merchant.id },
       });
     });

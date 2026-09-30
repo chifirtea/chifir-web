@@ -89,6 +89,22 @@ type NavigatorWithMemory = Navigator & { deviceMemory?: number };
  * Decides the starting quality tier and form factor. Browser-only; on the server it returns the
  * medium desktop preset so SSR never throws.
  */
+const TIERS = new Set<QualityTier>(["low", "medium", "high"]);
+
+/** Explicit override for QA and support: `?quality=low` or localStorage `chifir.quality`. */
+export function readQualityOverride(): QualityTier | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const fromUrl = new URLSearchParams(window.location.search).get("quality");
+    if (fromUrl && TIERS.has(fromUrl as QualityTier)) return fromUrl as QualityTier;
+    const stored = window.localStorage.getItem("chifir.quality");
+    if (stored && TIERS.has(stored as QualityTier)) return stored as QualityTier;
+  } catch {
+    // Storage may be unavailable (private mode); ignore.
+  }
+  return null;
+}
+
 export function detectInitialQuality(): DetectedQuality {
   if (typeof window === "undefined" || typeof navigator === "undefined") {
     return { tier: "medium", mobile: false };
@@ -96,6 +112,8 @@ export function detectInitialQuality(): DetectedQuality {
   const nav = navigator as NavigatorWithMemory;
   const mobile = isMobileDevice(nav.userAgent ?? "", nav.maxTouchPoints ?? 0);
   const gpu = readGpuRenderer();
+  const override = readQualityOverride();
+  if (override) return gpu ? { tier: override, mobile, gpu } : { tier: override, mobile };
   const tier = tierFromSignals({
     mobile,
     cores: typeof nav.hardwareConcurrency === "number" ? nav.hardwareConcurrency : undefined,

@@ -1,6 +1,6 @@
 import { chromium, devices } from "@playwright/test";
 const SHOTS = process.env.SHOTS_DIR ?? "/tmp/claude-0/-home-user-chifir-web/68e939da-bf13-5955-be07-b7b84d7d7849/scratchpad/shots";
-const BASE = process.env.E2E_BASE_URL ?? "http://127.0.0.1:3100";
+const BASE = process.env.E2E_BASE_URL ?? "http://localhost:3100";
 const args = ["--use-gl=angle", "--use-angle=swiftshader", "--enable-webgl", "--ignore-gpu-blocklist", "--no-sandbox"];
 const browser = await chromium.launch({ executablePath: process.env.PW_CHROMIUM_PATH ?? "/opt/pw-browsers/chromium", args });
 
@@ -26,9 +26,11 @@ async function run(name, ctxOpts, fn) {
 }
 
 const waitReady = async (page, timeout = 60000) => {
-  // Loading screen fades out when the world store reports ready; wait until the HUD interaction layer exists
-  await page.waitForFunction(() => !document.querySelector('[data-loading-screen]') || document.querySelector('[data-loading-screen]')?.getAttribute('data-hidden') === 'true', null, { timeout }).catch(() => {});
-  await page.waitForTimeout(2500);
+  // The HUD reports data-ready="true" once the canvas has presented its first frames.
+  const t0 = Date.now();
+  await page.waitForSelector('[data-testid="hud"][data-ready="true"]', { timeout }).catch(() => {});
+  console.log("   time to ready:", Date.now() - t0, "ms");
+  await page.waitForTimeout(1500);
 };
 
 await run("landing-desktop", { viewport: { width: 1280, height: 800 } }, async (page) => {
@@ -83,6 +85,40 @@ await run("city-mobile", { ...devices["Pixel 7"] }, async (page) => {
   await page.goto(BASE + "/city?to=kori-ramen", { waitUntil: "domcontentloaded" });
   await waitReady(page);
   await page.screenshot({ path: `${SHOTS}/city-mobile.png` });
+});
+
+
+await run("panels-desktop", { viewport: { width: 1280, height: 800 } }, async (page) => {
+  await page.goto(BASE + "/city?to=ember-and-oak&quality=low", { waitUntil: "domcontentloaded" });
+  await waitReady(page);
+  // Concierge without an API key must degrade gracefully.
+  await page.getByTestId("concierge-button").click();
+  await page.getByRole("textbox").first().fill("Something spicy under $25");
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(2500);
+  await page.screenshot({ path: `${SHOTS}/panel-concierge.png` });
+  const t = await page.evaluate(() => document.body.innerText);
+  console.log("   concierge copy:", (t.match(/off duty[^\n]*/i) || t.match(/not (set up|available)[^\n]*/i) || ["(no unavailable message found)"])[0]);
+  await page.keyboard.press("Escape");
+  await page.getByTestId("places-button").click();
+  await page.waitForTimeout(800);
+  await page.screenshot({ path: `${SHOTS}/panel-places.png` });
+  await page.keyboard.press("Escape");
+  // Enter and talk to the employee via the door prompt + debug bridge.
+  await page.getByTestId("interaction-prompt").click();
+  await page.waitForTimeout(2500);
+  await page.screenshot({ path: `${SHOTS}/interior-ember-sconces.png` });
+  await page.evaluate(() => window.__chifirDebug?.talkToEmployee(window.__chifirDebug.world().location.merchantId));
+  await page.waitForTimeout(1000);
+  await page.screenshot({ path: `${SHOTS}/panel-employee.png` });
+  await page.keyboard.press("Escape");
+  await page.evaluate(() => window.__chifirDebug?.inspectFirstProduct());
+  await page.waitForTimeout(1000);
+  await page.screenshot({ path: `${SHOTS}/panel-product.png` });
+  await page.keyboard.press("Escape");
+  await page.getByTestId("cart-button").click();
+  await page.waitForTimeout(600);
+  await page.screenshot({ path: `${SHOTS}/panel-cart-empty.png` });
 });
 
 await browser.close();

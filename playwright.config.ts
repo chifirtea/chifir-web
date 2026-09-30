@@ -7,7 +7,8 @@ const chromiumPath =
 const gpuArgs = ["--use-gl=angle", "--use-angle=swiftshader", "--enable-webgl", "--ignore-gpu-blocklist"];
 
 const PORT = Number(process.env.E2E_PORT ?? 3100);
-const baseURL = process.env.E2E_BASE_URL ?? `http://127.0.0.1:${PORT}`;
+// Next dev only serves its client runtime to allowed origins; localhost is the default one.
+const baseURL = process.env.E2E_BASE_URL ?? `http://localhost:${PORT}`;
 
 /**
  * Smoke tests against the zero-infra static mode. Start the app yourself for iteration
