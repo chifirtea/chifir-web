@@ -9,6 +9,8 @@ import { CityScene } from "@/city/CityScene";
 import { InteriorScene } from "@/city/InteriorScene";
 import { useCityStore } from "@/city/cityStore";
 import type { CityIndex } from "@/city/cityIndex";
+import { useCityPhaseTicker } from "@/city/useCityPhase";
+import { initClientClock } from "@/lib/time/clientClock";
 import { parseDeepLinkTarget, resolveNavTarget } from "@/city/navigation";
 import { Button } from "@/components/ui/Button";
 import { LoadingScreen } from "@/components/ui/LoadingScreen";
@@ -41,6 +43,8 @@ export interface CityAppProps {
   ask?: string;
   /** `?checkout=cancelled` after a Stripe cancel: shows a small notice. */
   checkout?: string;
+  /** Demo clock offset (ms) parsed from `?clock=` by the page, only when the server allows it. */
+  clockOffsetMs?: number;
 }
 
 /** Fallback if the loader never reports ready (e.g. a silent WebGL failure): reveal the HUD anyway. */
@@ -55,7 +59,12 @@ function defaultSpawn(index: CityIndex): PlayerPose {
 }
 
 /** Runs once, synchronously, before any child mounts: seeds the stores and places the player. */
-function initCity(snapshot: CitySnapshot, deepLinkTo: string | undefined): void {
+function initCity(
+  snapshot: CitySnapshot,
+  deepLinkTo: string | undefined,
+  clockOffsetMs: number | undefined,
+): void {
+  initClientClock(clockOffsetMs);
   const city = useCityStore.getState();
   city.setSnapshot(snapshot);
   const index = useCityStore.getState().index;
@@ -98,11 +107,12 @@ function initCity(snapshot: CitySnapshot, deepLinkTo: string | undefined): void 
   }
 }
 
-export function CityApp({ snapshot, deepLinkTo, ask, checkout }: CityAppProps) {
+export function CityApp({ snapshot, deepLinkTo, ask, checkout, clockOffsetMs }: CityAppProps) {
   useState(() => {
-    initCity(snapshot, deepLinkTo);
+    initCity(snapshot, deepLinkTo, clockOffsetMs);
     return true;
   });
+  useCityPhaseTicker();
 
   const location = useWorldStore((s) => s.location);
   const ready = useWorldStore((s) => s.ready);
@@ -168,7 +178,7 @@ export function CityApp({ snapshot, deepLinkTo, ask, checkout }: CityAppProps) {
             {location.kind === "street" ? (
               <CityScene />
             ) : (
-              <InteriorScene merchantId={location.merchantId} />
+              <InteriorScene merchantId={location.merchantId} parcelId={location.parcelId} />
             )}
             <Player />
             <HotspotScanner />

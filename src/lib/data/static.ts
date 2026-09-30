@@ -6,6 +6,7 @@ import type {
   DigitalReward,
   District,
   Merchant,
+  MerchantDraft,
   Offer,
   Order,
   OrderFulfillment,
@@ -23,11 +24,15 @@ import type {
   CreateOrderInput,
   DataSource,
   EventListParams,
+  MerchantDraftInput,
   MerchantSearchParams,
   OrderPatch,
   ProductSearchParams,
+  SnapshotOptions,
 } from "./types";
+import { draftPublishProblem, rowsFromDraft, type PublishedMerchantRows } from "./drafts";
 import { filterMerchants, filterProducts, isOpenNow } from "./search";
+import { eventPhase } from "@/lib/events/status";
 
 /**
  * In-memory DataSource over the seed data. Full parity with the Supabase implementation for
@@ -39,26 +44,56 @@ export class StaticDataSource implements DataSource {
   private orders = new Map<string, Order>();
   private profiles = new Map<string, Profile>();
   private rewards = new Map<string, UserReward[]>();
-  private conversations = new Map<string, { scope: "concierge" | "employee"; merchantId?: string; messages: AiMessageRecord[] }>();
+  private conversations = new Map<
+    string,
+    { scope: "concierge" | "employee"; merchantId?: string; messages: AiMessageRecord[] }
+  >();
   private analytics: AnalyticsRecord[] = [];
   private snapshotBuiltAt = 0;
+  private snapshotClock = 0;
+  private readonly fixedSnapshot: boolean;
+  private drafts = new Map<string, MerchantDraft>();
+  /** Merchants published from drafts in this process (static mode has no database to persist to). */
+  private published: PublishedMerchantRows[] = [];
 
   constructor(snapshot?: CitySnapshot) {
+    this.fixedSnapshot = Boolean(snapshot);
     this.snapshot = snapshot ?? buildCitySnapshot();
     this.snapshotBuiltAt = Date.now();
+    this.snapshotClock = Date.now();
   }
 
-  /** Events/offers are time-relative; rebuild every few minutes so statuses stay fresh. */
-  private fresh(): CitySnapshot {
-    if (Date.now() - this.snapshotBuiltAt > 5 * 60_000) {
-      this.snapshot = buildCitySnapshot();
+  /**
+   * Events/offers are time-relative; rebuild every few minutes so statuses stay fresh, and
+   * whenever a caller's clock differs from the one the snapshot was built for (demo clock).
+   */
+  private fresh(now: number = Date.now()): CitySnapshot {
+    const stale = Date.now() - this.snapshotBuiltAt > 5 * 60_000;
+    const drift = Math.abs(now - this.snapshotClock) > 60_000;
+    if (!this.fixedSnapshot && (stale || drift)) {
+      this.snapshot = buildCitySnapshot(new Date(now));
       this.snapshotBuiltAt = Date.now();
+      this.snapshotClock = now;
     }
-    return this.snapshot;
+    return this.published.length ? this.withPublished(this.snapshot) : this.snapshot;
   }
 
-  async getCitySnapshot(): Promise<CitySnapshot> {
-    const s = structuredClone(this.fresh());
+  private withPublished(base: CitySnapshot): CitySnapshot {
+    const replaced = new Set(this.published.map((r) => r.parcel.id));
+    return {
+      ...base,
+      parcels: [
+        ...base.parcels.filter((p) => !replaced.has(p.id)),
+        ...this.published.map((r) => r.parcel),
+      ],
+      merchants: [...base.merchants, ...this.published.map((r) => r.merchant)],
+      products: [...base.products, ...this.published.flatMap((r) => r.products)],
+      employees: [...base.employees, ...this.published.map((r) => r.employee)],
+    };
+  }
+
+  async getCitySnapshot(options: SnapshotOptions = {}): Promise<CitySnapshot> {
+    const s = structuredClone(this.fresh(options.now?.getTime()));
     return { ...s, employees: s.employees.map(toPublicEmployee) };
   }
   async listDistricts(): Promise<District[]> {
@@ -78,7 +113,11 @@ export class StaticDataSource implements DataSource {
   }
   async searchMerchants(params: MerchantSearchParams): Promise<Merchant[]> {
     const s = this.fresh();
-    return filterMerchants(s.merchants.filter((m) => m.status === "published"), s.parcels, params);
+    return filterMerchants(
+      s.merchants.filter((m) => m.status === "published"),
+      s.parcels,
+      params,
+    );
   }
   async listProducts(merchantId: string): Promise<Product[]> {
     return this.fresh()
@@ -111,9 +150,10 @@ export class StaticDataSource implements DataSource {
   async listEvents(params: EventListParams = {}): Promise<CityEvent[]> {
     const from = params.from ? Date.parse(params.from) : null;
     const to = params.to ? Date.parse(params.to) : null;
-    return this.fresh()
+    const now = from ?? Date.now();
+    return this.fresh(now)
       .events.filter((e) => e.status !== "cancelled")
-      .filter((e) => !params.status || params.status.includes(e.status))
+      .filter((e) => !params.status || params.status.includes(eventPhase(e, now)))
       .filter((e) => from === null || Date.parse(e.endsAt) >= from)
       .filter((e) => to === null || Date.parse(e.startsAt) <= to)
       .sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt))
@@ -170,14 +210,19 @@ export class StaticDataSource implements DataSource {
     this.orders.set(id, next);
     return structuredClone(next);
   }
-  async markOrderPaid(id: string, patch: { stripePaymentIntentId?: string; paidAt: string }): Promise<Order | null> {
+  async markOrderPaid(
+    id: string,
+    patch: { stripePaymentIntentId?: string; paidAt: string },
+  ): Promise<Order | null> {
     const o = this.orders.get(id);
     if (!o || o.status !== "pending_payment") return null;
     const next: Order = {
       ...o,
       status: "paid",
       paidAt: patch.paidAt,
-      ...(patch.stripePaymentIntentId ? { stripePaymentIntentId: patch.stripePaymentIntentId } : {}),
+      ...(patch.stripePaymentIntentId
+        ? { stripePaymentIntentId: patch.stripePaymentIntentId }
+        : {}),
       updatedAt: new Date().toISOString(),
     };
     this.orders.set(id, next);
@@ -195,7 +240,9 @@ export class StaticDataSource implements DataSource {
       .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
       .map((o) => structuredClone(o));
   }
-  async upsertFulfillment(f: Omit<OrderFulfillment, "id"> & { id?: string }): Promise<OrderFulfillment> {
+  async upsertFulfillment(
+    f: Omit<OrderFulfillment, "id"> & { id?: string },
+  ): Promise<OrderFulfillment> {
     const o = this.orders.get(f.orderId);
     if (!o) throw new Error(`Order ${f.orderId} not found`);
     const id = f.id ?? randomId("ful");
@@ -210,7 +257,12 @@ export class StaticDataSource implements DataSource {
     const list = this.rewards.get(userId) ?? [];
     const existing = list.find((r) => r.rewardId === rewardId);
     if (existing) return existing;
-    const reward: UserReward = { userId, rewardId, grantedAt: new Date().toISOString(), ...(sourceOrderId ? { sourceOrderId } : {}) };
+    const reward: UserReward = {
+      userId,
+      rewardId,
+      grantedAt: new Date().toISOString(),
+      ...(sourceOrderId ? { sourceOrderId } : {}),
+    };
     list.push(reward);
     this.rewards.set(userId, list);
     return reward;
@@ -221,14 +273,22 @@ export class StaticDataSource implements DataSource {
   async getProfile(userId: string): Promise<Profile | null> {
     return this.profiles.get(userId) ?? null;
   }
-  async updateProfile(userId: string, patch: Partial<Omit<Profile, "id" | "createdAt">>): Promise<Profile> {
+  async updateProfile(
+    userId: string,
+    patch: Partial<Omit<Profile, "id" | "createdAt">>,
+  ): Promise<Profile> {
     const current = this.profiles.get(userId) ?? defaultProfile(userId);
     const next = { ...current, ...patch };
     this.profiles.set(userId, next);
     return next;
   }
   private xpKeys = new Set<string>();
-  async addXp(userId: string, amount: number, reason: string, sourceOrderId?: string): Promise<Profile> {
+  async addXp(
+    userId: string,
+    amount: number,
+    reason: string,
+    sourceOrderId?: string,
+  ): Promise<Profile> {
     const current = this.profiles.get(userId) ?? defaultProfile(userId);
     if (sourceOrderId) {
       const key = `${userId}:${reason}:${sourceOrderId}`;
@@ -245,7 +305,8 @@ export class StaticDataSource implements DataSource {
     if (!offer || !offer.active) return false;
     const now = Date.now();
     if (Date.parse(offer.startsAt) > now || Date.parse(offer.endsAt) < now) return false;
-    if (offer.maxRedemptions !== undefined && offer.redemptionsCount >= offer.maxRedemptions) return false;
+    if (offer.maxRedemptions !== undefined && offer.redemptionsCount >= offer.maxRedemptions)
+      return false;
     offer.redemptionsCount += 1;
     return true;
   }
@@ -261,10 +322,57 @@ export class StaticDataSource implements DataSource {
     messages: AiMessageRecord[];
   }): Promise<{ conversationId: string }> {
     const id = input.conversationId ?? randomId("conv");
-    const conv = this.conversations.get(id) ?? { scope: input.scope, messages: [], ...(input.merchantId ? { merchantId: input.merchantId } : {}) };
+    const conv = this.conversations.get(id) ?? {
+      scope: input.scope,
+      messages: [],
+      ...(input.merchantId ? { merchantId: input.merchantId } : {}),
+    };
     conv.messages.push(...input.messages);
     this.conversations.set(id, conv);
     return { conversationId: id };
+  }
+
+  // ------------------------------------------------------------------ admin (merchant generator)
+  async saveMerchantDraft(input: MerchantDraftInput): Promise<MerchantDraft> {
+    const now = new Date().toISOString();
+    const existing = input.id ? this.drafts.get(input.id) : undefined;
+    if (existing?.status === "published") throw new Error("A published draft cannot be edited.");
+    const draft: MerchantDraft = {
+      ...input,
+      id: input.id ?? randomId("draft"),
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+    };
+    this.drafts.set(draft.id, structuredClone(draft));
+    return structuredClone(draft);
+  }
+  async getMerchantDraft(id: string): Promise<MerchantDraft | null> {
+    const d = this.drafts.get(id);
+    return d ? structuredClone(d) : null;
+  }
+  async listMerchantDrafts(): Promise<MerchantDraft[]> {
+    return [...this.drafts.values()]
+      .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
+      .map((d) => structuredClone(d));
+  }
+  async publishMerchantDraft(id: string): Promise<{ merchantId: string }> {
+    const draft = this.drafts.get(id);
+    if (!draft) throw new Error(`Draft ${id} not found`);
+    const parcel = this.fresh().parcels.find((p) => p.id === draft.placement?.parcelId);
+    const problem = draftPublishProblem(draft, parcel);
+    if (problem || !parcel) throw new Error(problem ?? "Cannot publish this draft.");
+    const merchantId = randomId("mer");
+    const rows = rowsFromDraft(
+      draft,
+      parcel,
+      { merchantId, employeeId: randomId("emp"), productId: () => randomId("prd") },
+      new Date().toISOString(),
+    );
+    this.published.push(rows);
+    draft.status = "published";
+    draft.publishedMerchantId = merchantId;
+    draft.updatedAt = new Date().toISOString();
+    return { merchantId };
   }
 }
 

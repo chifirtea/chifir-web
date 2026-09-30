@@ -6,13 +6,17 @@ import type { DietaryTag, Id, MerchantCard, NavTarget, ProductCard } from "@/typ
  */
 export type AIAction =
   | { type: "navigate"; target: NavTarget; mode: "teleport" | "guide"; label: string }
-  | { type: "propose_cart"; items: Array<{ productId: Id; quantity: number; variantSelection?: Record<string, string> }>; note?: string }
+  | {
+      type: "propose_cart";
+      items: Array<{ productId: Id; quantity: number; variantSelection?: Record<string, string> }>;
+      note?: string;
+    }
   | { type: "escalate"; merchantId: Id; reason: string };
 
 export type ChatScope = "concierge" | "employee";
 
 export interface ChatContext {
-  location: { kind: "street" } | { kind: "interior"; merchantId: Id };
+  location: { kind: "street" } | { kind: "interior"; merchantId: Id; parcelId?: Id };
   /** Line ids only; the server prices them from the catalog. */
   cart: { lines: Array<{ productId: Id; quantity: number }> };
   /** ISO local time string of the user, e.g. "2026-09-30T19:12:00-07:00". */

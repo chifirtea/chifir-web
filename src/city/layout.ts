@@ -100,7 +100,9 @@ export function pointInAabb(p: Vec2, box: AABB): boolean {
 }
 
 function pointOn(road: RoadSpec, along: number, perpOffset: number): Vec2 {
-  return road.axis === "x" ? { x: along, z: road.perp + perpOffset } : { x: road.perp + perpOffset, z: along };
+  return road.axis === "x"
+    ? { x: along, z: road.perp + perpOffset }
+    : { x: road.perp + perpOffset, z: along };
 }
 
 function alongOf(road: RoadSpec, p: Vec2): number {
@@ -150,16 +152,24 @@ function deriveRoads(index: CityIndex, plaza: StreetLayout["plaza"]): RoadSpec[]
     const axis: "x" | "z" = Math.abs(dx) >= Math.abs(dz) ? "x" : "z";
     const dir: 1 | -1 = (axis === "x" ? dx : dz) >= 0 ? 1 : -1;
 
-    // Centre line: mean of the front lines of parcels that face across the axis; else the plaza axis.
-    const fronts: number[] = [];
+    // Centre line: each parcel facing across the axis votes for a line half a street width in
+    // front of it; votes far from the plaza axis (side lots, pop-ups off the street) are ignored.
+    const axisLine = axis === "x" ? plaza.z : plaza.x;
+    const votes: number[] = [];
     for (const p of parcels) {
       const f = parcelFacing(p);
       const facesAcross = axis === "x" ? Math.abs(f.z) > 0.5 : Math.abs(f.x) > 0.5;
       if (!facesAcross) continue;
-      const front = axis === "x" ? p.position.z + f.z * (p.size.depth / 2) : p.position.x + f.x * (p.size.depth / 2);
-      fronts.push(front);
+      const facing = axis === "x" ? f.z : f.x;
+      const front =
+        axis === "x"
+          ? p.position.z + f.z * (p.size.depth / 2)
+          : p.position.x + f.x * (p.size.depth / 2);
+      const vote = front + facing * (STREET_WIDTH / 2);
+      if (Math.abs(vote - axisLine) > STREET_WIDTH) continue;
+      votes.push(vote);
     }
-    const perp = fronts.length ? fronts.reduce((s, v) => s + v, 0) / fronts.length : axis === "x" ? plaza.z : plaza.x;
+    const perp = votes.length ? votes.reduce((s, v) => s + v, 0) / votes.length : axisLine;
 
     const a = (axis === "x" ? plaza.x : plaza.z) + dir * plaza.radius;
     let end = axis === "x" ? (dir > 0 ? b.maxX : b.minX) : dir > 0 ? b.maxZ : b.minZ;
@@ -168,7 +178,8 @@ function deriveRoads(index: CityIndex, plaza: StreetLayout["plaza"]): RoadSpec[]
       const box = parcelAabb(p);
       const perpMin = axis === "x" ? box.minZ : box.minX;
       const perpMax = axis === "x" ? box.maxZ : box.maxX;
-      if (perpMax <= perp - STREET_WIDTH / 2 + 0.01 || perpMin >= perp + STREET_WIDTH / 2 - 0.01) continue;
+      if (perpMax <= perp - STREET_WIDTH / 2 + 0.01 || perpMin >= perp + STREET_WIDTH / 2 - 0.01)
+        continue;
       const near = axis === "x" ? (dir > 0 ? box.minX : box.maxX) : dir > 0 ? box.minZ : box.maxZ;
       if (dir > 0 ? near < end : near > end) end = near;
     }
@@ -192,8 +203,9 @@ export function getStreetLayout(index: CityIndex): StreetLayout {
 export function buildStreetLayout(index: CityIndex): StreetLayout {
   const parcels = index.snapshot.parcels;
   const plazaDistrict =
-    index.snapshot.districts.find((d) => d.bounds.minX <= 0 && d.bounds.maxX >= 0 && d.bounds.minZ <= 0 && d.bounds.maxZ >= 0) ??
-    null;
+    index.snapshot.districts.find(
+      (d) => d.bounds.minX <= 0 && d.bounds.maxX >= 0 && d.bounds.minZ <= 0 && d.bounds.maxZ >= 0,
+    ) ?? null;
   const plaza = plazaDistrict
     ? {
         x: (plazaDistrict.bounds.minX + plazaDistrict.bounds.maxX) / 2,
@@ -259,7 +271,11 @@ export function buildStreetLayout(index: CityIndex): StreetLayout {
       }
       reach = Math.max(reach, hi);
     }
-    if (bestGap && Math.abs(bestGap.center - road.a) > 12 && Math.abs(bestGap.center - road.b) > 8) {
+    if (
+      bestGap &&
+      Math.abs(bestGap.center - road.a) > 12 &&
+      Math.abs(bestGap.center - road.b) > 8
+    ) {
       const mid = pointOn(road, bestGap.center, 0);
       crosswalks.push({ x: mid.x, z: mid.z, yaw, width: CARRIAGEWAY_WIDTH, length: 3 });
     }
@@ -317,12 +333,18 @@ export function buildStreetLayout(index: CityIndex): StreetLayout {
   for (const p of parcels) {
     if (p.tier === "billboard") continue;
     const f = parcelFacing(p);
-    const frontCenter = { x: p.position.x + f.x * (p.size.depth / 2), z: p.position.z + f.z * (p.size.depth / 2) };
+    const frontCenter = {
+      x: p.position.x + f.x * (p.size.depth / 2),
+      z: p.position.z + f.z * (p.size.depth / 2),
+    };
     const halfW = p.size.width / 2;
     const rx = f.z;
     const rz = -f.x;
     const apron = FACADE_SETBACK;
-    const centre = { x: frontCenter.x - f.x * (apron / 2 - 0.75), z: frontCenter.z - f.z * (apron / 2 - 0.75) };
+    const centre = {
+      x: frontCenter.x - f.x * (apron / 2 - 0.75),
+      z: frontCenter.z - f.z * (apron / 2 - 0.75),
+    };
     sidewalks.push({
       kind: "forecourt",
       x1: centre.x - rx * halfW,
@@ -334,26 +356,36 @@ export function buildStreetLayout(index: CityIndex): StreetLayout {
   }
 
   // Plaza furniture: lamps on the outer ring, benches facing the fountain, planters between.
-  const ring = (count: number, radius: number, offset: number, fn: (p: Vec2, angle: number) => void) => {
+  const ring = (
+    count: number,
+    radius: number,
+    offset: number,
+    fn: (p: Vec2, angle: number) => void,
+  ) => {
     for (let i = 0; i < count; i++) {
       const angle = offset + (i / count) * Math.PI * 2;
       fn({ x: plaza.x + Math.sin(angle) * radius, z: plaza.z + Math.cos(angle) * radius }, angle);
     }
   };
   ring(12, plaza.radius - 3, 0, (p) => {
-    if (!blocked(p) && !roadSpecs.some((r) => inRoadCorridor(r, p, STREET_WIDTH / 2 + 2, 6))) lampPositions.push(p);
+    if (!blocked(p) && !roadSpecs.some((r) => inRoadCorridor(r, p, STREET_WIDTH / 2 + 2, 6)))
+      lampPositions.push(p);
   });
   ring(8, 13, Math.PI / 8, (p) => {
-    if (!blocked(p)) benchPoses.push({ x: p.x, z: p.z, yaw: Math.atan2(plaza.x - p.x, plaza.z - p.z) });
+    if (!blocked(p))
+      benchPoses.push({ x: p.x, z: p.z, yaw: Math.atan2(plaza.x - p.x, plaza.z - p.z) });
   });
   ring(4, plaza.radius - 7, Math.PI / 4, (p) => {
-    if (!blocked(p)) benchPoses.push({ x: p.x, z: p.z, yaw: Math.atan2(plaza.x - p.x, plaza.z - p.z) });
+    if (!blocked(p))
+      benchPoses.push({ x: p.x, z: p.z, yaw: Math.atan2(plaza.x - p.x, plaza.z - p.z) });
   });
   ring(8, 19, 0, (p) => {
-    if (!blocked(p) && !roadSpecs.some((r) => inRoadCorridor(r, p, STREET_WIDTH / 2 + 1, 4))) planterPositions.push(p);
+    if (!blocked(p) && !roadSpecs.some((r) => inRoadCorridor(r, p, STREET_WIDTH / 2 + 1, 4)))
+      planterPositions.push(p);
   });
   ring(8, plaza.radius - 8, Math.PI / 8, (p) => {
-    if (!blocked(p) && !roadSpecs.some((r) => inRoadCorridor(r, p, STREET_WIDTH / 2, 4))) treePositions.push(p);
+    if (!blocked(p) && !roadSpecs.some((r) => inRoadCorridor(r, p, STREET_WIDTH / 2, 4)))
+      treePositions.push(p);
   });
 
   // Plaza stroll loop and one cross-city loop that links the two streets through the plaza.
@@ -377,14 +409,22 @@ export function buildStreetLayout(index: CityIndex): StreetLayout {
   // Final safety pass: nothing stands inside a parcel or on the asphalt.
   const keep = <T extends Vec2>(items: T[]): T[] => items.filter((p) => !blocked(p));
   // Lamps also stay clear of crosswalk bollards.
-  const lamps = keep(lampPositions).filter((p) => !crosswalks.some((c) => Math.hypot(c.x - p.x, c.z - p.z) < 5.5));
+  const lamps = keep(lampPositions).filter(
+    (p) => !crosswalks.some((c) => Math.hypot(c.x - p.x, c.z - p.z) < 5.5),
+  );
   const trees = keep(treePositions);
   const benches = keep(benchPoses);
   const planters = keep(planterPositions);
   const posts = keep(bollards);
 
   const environmentColliders: AABB[] = [
-    aabbFromCenter("fountain", plaza.x, plaza.z, FOUNTAIN_RADIUS * 2 + 0.4, FOUNTAIN_RADIUS * 2 + 0.4),
+    aabbFromCenter(
+      "fountain",
+      plaza.x,
+      plaza.z,
+      FOUNTAIN_RADIUS * 2 + 0.4,
+      FOUNTAIN_RADIUS * 2 + 0.4,
+    ),
     ...lamps.map((p, i) => aabbFromCenter(`lamp:${i}`, p.x, p.z, 0.5, 0.5)),
     ...trees.map((p, i) => aabbFromCenter(`tree:${i}`, p.x, p.z, 0.7, 0.7)),
     ...benches.map((p, i) => aabbFromCenter(`bench:${i}`, p.x, p.z, 1.9, 0.7, p.yaw)),

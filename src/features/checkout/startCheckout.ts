@@ -1,3 +1,4 @@
+import { clockHeaders } from "@/lib/time/clientClock";
 import type { Address, CartLine, FulfillmentSelection, OrderContact } from "@/types/domain";
 import { flush, getAnonymousId, getSessionId, track } from "@/lib/analytics/client";
 import type { CartTotals } from "@/features/cart/pricing";
@@ -58,7 +59,7 @@ export async function startCheckout(input: StartCheckoutInput): Promise<StartChe
   try {
     res = await fetch("/api/checkout", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...clockHeaders() },
       body: JSON.stringify(body),
     });
   } catch {

@@ -8,6 +8,7 @@ import { CheckoutError, completeOrder, createCheckoutOrder } from "@/lib/commerc
 import { createStripeCheckoutSession } from "@/lib/commerce/stripeCheckout";
 import { jsonError, parseBody } from "@/lib/commerce/http";
 import type { CheckoutResponse } from "@/lib/commerce/types";
+import { requestNow } from "@/lib/time/serverClock";
 
 export const runtime = "nodejs";
 
@@ -31,7 +32,12 @@ export async function POST(req: NextRequest) {
 
   try {
     const { order, totals, accessToken } = await createCheckoutOrder(
-      { body: parsed.data, paymentProvider, ...(user ? { userId: user.id } : {}) },
+      {
+        body: parsed.data,
+        paymentProvider,
+        now: requestNow(req),
+        ...(user ? { userId: user.id } : {}),
+      },
       ds,
     );
     const orderPath = `/orders/${order.id}?t=${accessToken}`;

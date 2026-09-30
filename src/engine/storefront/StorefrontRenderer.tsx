@@ -41,13 +41,19 @@ export function StorefrontRenderer() {
   const setHotspots = useHotspotStore((s) => s.setHotspots);
   const clearHotspots = useHotspotStore((s) => s.clearHotspots);
 
+  // One entry per parcel occupied right now: permanent storefronts and live pop-ups alike. A
+  // parcel may request its own structure (a pop-up shell) instead of the tenant's default.
   const entries = useMemo<Entry[]>(() => {
     if (!index) return [];
     const out: Entry[] = [];
-    for (const merchant of Object.values(index.merchantsById)) {
-      const parcel = index.parcelByMerchant[merchant.id];
-      if (!parcel) continue;
-      out.push({ merchant, parcel, def: getStorefrontTemplate(merchant.storefrontTemplate) });
+    for (const parcel of index.occupiedParcels) {
+      const merchant = parcel.merchantId ? index.merchantsById[parcel.merchantId] : undefined;
+      if (!merchant) continue;
+      out.push({
+        merchant,
+        parcel,
+        def: getStorefrontTemplate(parcel.storefrontTemplate ?? merchant.storefrontTemplate),
+      });
     }
     return out.sort((a, b) => a.parcel.slug.localeCompare(b.parcel.slug));
   }, [index]);
@@ -58,7 +64,10 @@ export function StorefrontRenderer() {
     return index.snapshot.parcels.filter((p) => p.tier !== "billboard" && !used.has(p.id));
   }, [index, entries]);
 
-  const billboards = useMemo<Parcel[]>(() => (index ? index.snapshot.parcels.filter((p) => p.tier === "billboard") : []), [index]);
+  const billboards = useMemo<Parcel[]>(
+    () => (index ? index.snapshot.parcels.filter((p) => p.tier === "billboard") : []),
+    [index],
+  );
   const layout = useMemo(() => (index ? getStreetLayout(index) : null), [index]);
 
   // Colliders: templates + lot signs + environment furniture.
@@ -78,14 +87,20 @@ export function StorefrontRenderer() {
     const hotspots: Hotspot[] = [];
     for (const { merchant, parcel, def } of entries) {
       const pose = doorPose(parcel, def);
+      const event = index.eventByParcel[parcel.id];
+      const isPopup = parcel.id !== index.parcelByMerchant[merchant.id]?.id;
       hotspots.push({
-        id: `door:${merchant.id}`,
+        id: `door:${parcel.id}`,
         kind: "door",
-        label: `Enter ${merchant.name}`,
+        label: isPopup && event ? `Enter the ${merchant.name} pop-up` : `Enter ${merchant.name}`,
         x: pose.x,
         z: pose.z,
         radius: 2.4,
-        payload: { merchantId: merchant.id },
+        payload: {
+          merchantId: merchant.id,
+          parcelId: parcel.id,
+          ...(isPopup && event ? { eventId: event.id } : {}),
+        },
       });
       if (merchant.merchantType === "venue") {
         const event = nextEventFor(index.snapshot.events, merchant.id, parcel.id);
@@ -138,8 +153,17 @@ export function StorefrontRenderer() {
       {entries.map(({ merchant, parcel, def }) => {
         const Template = def.Component;
         return (
-          <group key={parcel.id} position={[parcel.position.x, 0, parcel.position.z]} rotation={[0, parcel.rotationY, 0]}>
-            <Template merchant={merchant} parcel={parcel} quality={quality.tier} lod={lods[parcel.id] ?? 2} />
+          <group
+            key={parcel.id}
+            position={[parcel.position.x, 0, parcel.position.z]}
+            rotation={[0, parcel.rotationY, 0]}
+          >
+            <Template
+              merchant={merchant}
+              parcel={parcel}
+              quality={quality.tier}
+              lod={lods[parcel.id] ?? 2}
+            />
           </group>
         );
       })}

@@ -13,9 +13,9 @@
 import { config as loadEnv } from "dotenv";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import { districts, parcels } from "../src/data/seed/districts";
+import { buildParcels, districts } from "../src/data/seed/districts";
 import { employees, merchants } from "../src/data/seed/merchants";
-import { products } from "../src/data/seed/products";
+import { buildProducts } from "../src/data/seed/products";
 import { rewards } from "../src/data/seed/rewards";
 import { buildOffers } from "../src/data/seed/offers";
 import { buildEvents } from "../src/data/seed/events";
@@ -80,6 +80,8 @@ async function main(): Promise<void> {
   });
 
   const now = new Date();
+  const parcels = buildParcels(now);
+  const products = buildProducts(now);
   const offers = buildOffers(now);
   const events = buildEvents(now);
   const host = new URL(env.data.NEXT_PUBLIC_SUPABASE_URL).host;

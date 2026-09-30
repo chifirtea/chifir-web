@@ -36,9 +36,11 @@ const STATUS_TONE: Record<OrderStatus, "neutral" | "signal" | "mint" | "sodium" 
 const KIND_LABEL: Record<RewardKind, string> = {
   avatar_item: "Avatar item",
   apartment_item: "Apartment item",
+  food_prop: "Table item",
   badge: "Badge",
   vehicle: "Vehicle",
   emote: "Emote",
+  access_pass: "Access pass",
 };
 
 const RARITY_TONE: Record<DigitalReward["rarity"], "neutral" | "signal" | "mint" | "sodium"> = {

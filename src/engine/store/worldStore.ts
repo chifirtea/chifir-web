@@ -2,7 +2,12 @@ import { create } from "zustand";
 import type { Hotspot } from "@/engine/interaction/hotspots";
 import type { NavTarget } from "@/types/domain";
 
-export type Location = { kind: "street" } | { kind: "interior"; merchantId: string };
+/**
+ * Where the player is. Interiors are keyed by the parcel whose door was used: a merchant's
+ * permanent store and its event pop-up are different rooms with different products.
+ */
+export type Location =
+  { kind: "street" } | { kind: "interior"; merchantId: string; parcelId: string };
 
 /**
  * Yaw convention (everywhere in the engine): forward = (sin(yaw), 0, cos(yaw)).

@@ -8,6 +8,7 @@ import type {
   FulfillmentType,
   Id,
   Merchant,
+  MerchantDraft,
   MerchantType,
   Offer,
   Order,
@@ -71,6 +72,18 @@ export interface EventListParams {
   limit?: number;
 }
 
+export interface SnapshotOptions {
+  /**
+   * The clock to build time-relative seed data for (static mode only: the seed schedules its
+   * demo events "tonight"). Production data is absolute and ignores this.
+   */
+  now?: Date;
+}
+
+export type MerchantDraftInput = Omit<MerchantDraft, "id" | "createdAt" | "updatedAt"> & {
+  id?: Id;
+};
+
 export type CreateOrderInput = Omit<
   Order,
   "id" | "items" | "fulfillments" | "createdAt" | "updatedAt" | "placedAt"
@@ -99,7 +112,7 @@ export interface AiMessageRecord {
 
 /** Public catalog reads. Safe to expose through server components and AI tools. */
 export interface CatalogSource {
-  getCitySnapshot(): Promise<CitySnapshot>;
+  getCitySnapshot(options?: SnapshotOptions): Promise<CitySnapshot>;
   listDistricts(): Promise<District[]>;
   listParcels(districtId?: Id): Promise<Parcel[]>;
   listMerchants(): Promise<Merchant[]>;
@@ -127,11 +140,16 @@ export interface CommerceSource {
    * Atomic pending_payment -> paid transition. Returns the order when this call performed the
    * transition, null when it was already paid/cancelled (webhook retries must then do nothing).
    */
-  markOrderPaid(id: Id, patch: { stripePaymentIntentId?: string; paidAt: string }): Promise<Order | null>;
+  markOrderPaid(
+    id: Id,
+    patch: { stripePaymentIntentId?: string; paidAt: string },
+  ): Promise<Order | null>;
   /** Attaches a guest order to a user when the access token hash matches. */
   claimOrder(id: Id, accessTokenHash: string, userId: Id): Promise<boolean>;
   listOrdersForUser(userId: Id): Promise<Order[]>;
-  upsertFulfillment(fulfillment: Omit<OrderFulfillment, "id"> & { id?: Id }): Promise<OrderFulfillment>;
+  upsertFulfillment(
+    fulfillment: Omit<OrderFulfillment, "id"> & { id?: Id },
+  ): Promise<OrderFulfillment>;
   grantReward(userId: Id, rewardId: Id, sourceOrderId?: Id): Promise<UserReward>;
   listUserRewards(userId: Id): Promise<UserReward[]>;
   getProfile(userId: Id): Promise<Profile | null>;
@@ -150,6 +168,19 @@ export interface CommerceSource {
   }): Promise<{ conversationId: Id }>;
 }
 
-export interface DataSource extends CatalogSource, CommerceSource {
+/**
+ * Admin-only onboarding writes (merchant generator). A draft never affects the city until
+ * `publishMerchantDraft` runs, which requires `status: "approved"` and a placement: the human
+ * review step is enforced at the data layer, not just in the UI.
+ */
+export interface AdminSource {
+  saveMerchantDraft(input: MerchantDraftInput): Promise<MerchantDraft>;
+  getMerchantDraft(id: Id): Promise<MerchantDraft | null>;
+  listMerchantDrafts(): Promise<MerchantDraft[]>;
+  /** Creates merchant + products + employee, occupies the parcel, marks the draft published. */
+  publishMerchantDraft(id: Id): Promise<{ merchantId: Id }>;
+}
+
+export interface DataSource extends CatalogSource, CommerceSource, AdminSource {
   readonly kind: "static" | "supabase";
 }

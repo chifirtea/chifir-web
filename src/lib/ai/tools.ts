@@ -1,4 +1,5 @@
 import "server-only";
+import { eventPhase } from "@/lib/events/status";
 import { z } from "zod";
 import type { CatalogSource } from "@/lib/data/types";
 import { isOpenNow } from "@/lib/data/search";
@@ -53,29 +54,69 @@ const MAX_EVENTS = 10;
 
 const shortString = (max: number) => z.string().trim().min(1).max(max);
 const merchantTypeSchema = z.enum(["restaurant", "retail", "service", "venue", "popup"]);
-const dietarySchema = z.enum(["vegan", "vegetarian", "gluten_free", "dairy_free", "nut_free", "halal", "kosher"]);
-const fulfillmentTypeSchema = z.enum(["delivery", "pickup", "shipping", "booking", "ticket", "digital", "lead"]);
+const dietarySchema = z.enum([
+  "vegan",
+  "vegetarian",
+  "gluten_free",
+  "dairy_free",
+  "nut_free",
+  "halal",
+  "kosher",
+]);
+const fulfillmentTypeSchema = z.enum([
+  "delivery",
+  "pickup",
+  "shipping",
+  "booking",
+  "ticket",
+  "digital",
+  "lead",
+]);
 const eventStatusSchema = z.enum(["scheduled", "live", "ended", "cancelled"]);
 
 const searchMerchantsSchema = z.object({
   query: shortString(120).optional().describe("Free text: cuisine, vibe, product type, name."),
   merchantType: merchantTypeSchema.optional(),
-  category: shortString(60).optional().describe('Category prefix such as "food", "food.ramen", "fashion", "gifts".'),
+  category: shortString(60)
+    .optional()
+    .describe('Category prefix such as "food", "food.ramen", "fashion", "gifts".'),
   openNow: z.boolean().optional().describe("Only places open right now."),
   maxPriceLevel: z.number().int().min(1).max(4).optional().describe("1 budget … 4 premium."),
-  tags: z.array(shortString(40)).max(6).optional().describe('Any-of tags, e.g. ["spicy","late-night","date-night"].'),
+  tags: z
+    .array(shortString(40))
+    .max(6)
+    .optional()
+    .describe('Any-of tags, e.g. ["spicy","late-night","date-night"].'),
   limit: z.number().int().min(1).max(MAX_MERCHANTS).optional(),
 });
 
 const searchProductsSchema = z.object({
-  query: shortString(120).optional().describe("Free text matched against title, description, tags and merchant."),
-  maxPriceCents: z.number().int().min(0).max(10_000_000).optional().describe("Base price ceiling in cents (2500 = $25)."),
+  query: shortString(120)
+    .optional()
+    .describe("Free text matched against title, description, tags and merchant."),
+  maxPriceCents: z
+    .number()
+    .int()
+    .min(0)
+    .max(10_000_000)
+    .optional()
+    .describe("Base price ceiling in cents (2500 = $25)."),
   minPriceCents: z.number().int().min(0).max(10_000_000).optional(),
   merchantIds: z.array(shortString(64)).max(20).optional(),
   merchantType: merchantTypeSchema.optional(),
   category: shortString(60).optional(),
-  dietary: z.array(dietarySchema).max(7).optional().describe("Every listed tag must be present on the product."),
-  minSpiceLevel: z.number().int().min(0).max(4).optional().describe("0 none … 4 extreme. Use 2 for 'spicy'."),
+  dietary: z
+    .array(dietarySchema)
+    .max(7)
+    .optional()
+    .describe("Every listed tag must be present on the product."),
+  minSpiceLevel: z
+    .number()
+    .int()
+    .min(0)
+    .max(4)
+    .optional()
+    .describe("0 none … 4 extreme. Use 2 for 'spicy'."),
   occasion: shortString(40).optional().describe('e.g. "date-night", "gift", "birthday".'),
   fulfillmentType: fulfillmentTypeSchema.optional(),
   tags: z.array(shortString(40)).max(6).optional(),
@@ -98,7 +139,9 @@ const navTargetSchema = z.discriminatedUnion("kind", [
 
 const navigateSchema = z.object({
   target: navTargetSchema,
-  mode: z.enum(["teleport", "guide"]).describe("teleport = jump there (user confirms); guide = show a waypoint."),
+  mode: z
+    .enum(["teleport", "guide"])
+    .describe("teleport = jump there (user confirms); guide = show a waypoint."),
   label: shortString(80).describe("Button label, e.g. the place name."),
 });
 
@@ -113,7 +156,11 @@ const proposeCartSchema = z.object({
       z.object({
         productId: shortString(64),
         quantity: z.number().int().min(1).max(10),
-        variantSelection: z.array(variantPairSchema).max(6).optional().describe("Required for products with required variant groups."),
+        variantSelection: z
+          .array(variantPairSchema)
+          .max(6)
+          .optional()
+          .describe("Required for products with required variant groups."),
       }),
     )
     .min(1)
@@ -123,7 +170,9 @@ const proposeCartSchema = z.object({
 
 const escalateSchema = z.object({
   merchantId: shortString(64),
-  reason: shortString(200).describe("Why a person should follow up (allergy detail, complaint, custom request…)."),
+  reason: shortString(200).describe(
+    "Why a person should follow up (allergy detail, complaint, custom request…).",
+  ),
 });
 
 const recommendItemsSchema = z.object({
@@ -155,11 +204,21 @@ function geoFor(ctx: ToolContext): Promise<Geo> {
       const districtById = new Map(districts.map((d) => [d.id, d]));
       const districtByMerchant = new Map<string, District>();
       for (const parcel of parcels as Parcel[]) {
-        if (!parcel.merchantId || parcel.tier === "billboard" || districtByMerchant.has(parcel.merchantId)) continue;
+        if (
+          !parcel.merchantId ||
+          parcel.tier === "billboard" ||
+          districtByMerchant.has(parcel.merchantId)
+        )
+          continue;
         const district = districtById.get(parcel.districtId);
         if (district) districtByMerchant.set(parcel.merchantId, district);
       }
-      return { districtById, districtByMerchant, merchantById: new Map(merchants.map((m) => [m.id, m])), offers };
+      return {
+        districtById,
+        districtByMerchant,
+        merchantById: new Map(merchants.map((m) => [m.id, m])),
+        offers,
+      };
     })();
     geoCache.set(ctx, cached);
   }
@@ -189,7 +248,11 @@ export function etaLabelFor(merchant: Merchant | undefined, product?: Product): 
     return `${range(f.pickup.minutesMin, f.pickup.minutesMax, "min")} pickup`;
   }
   if (types.includes("shipping") && f?.shipping?.enabled) {
-    const days = range(product?.leadTime.daysMin ?? f.shipping.daysMin, product?.leadTime.daysMax ?? f.shipping.daysMax, "day");
+    const days = range(
+      product?.leadTime.daysMin ?? f.shipping.daysMin,
+      product?.leadTime.daysMax ?? f.shipping.daysMax,
+      "day",
+    );
     return `${days} shipping`;
   }
   if (types.includes("booking") && f?.booking?.enabled) return "Book a time";
@@ -227,10 +290,17 @@ export interface LiveOfferSummary {
 }
 
 /** Tool-result shape: the UI's ProductFact plus allergens (for strict dietary answers) and the best live offer. */
-export type ProductFactWithOffer = ProductFact & { allergens?: string[]; liveOffer?: LiveOfferSummary };
+export type ProductFactWithOffer = ProductFact & {
+  allergens?: string[];
+  liveOffer?: LiveOfferSummary;
+};
 
 /** Best applicable live offer, including code-gated ones (reported with their code). */
-export function liveOfferFor(product: Product, offers: Offer[], now: Date): LiveOfferSummary | undefined {
+export function liveOfferFor(
+  product: Product,
+  offers: Offer[],
+  now: Date,
+): LiveOfferSummary | undefined {
   const unit = unitPriceCents(product);
   const auto = bestOfferFor(product, unit, offers, now);
   let best: Offer | null = auto;
@@ -255,7 +325,12 @@ export function liveOfferFor(product: Product, offers: Offer[], now: Date): Live
   };
 }
 
-export function toProductFact(p: Product, merchant: Merchant | undefined, offers: Offer[], now: Date): ProductFactWithOffer {
+export function toProductFact(
+  p: Product,
+  merchant: Merchant | undefined,
+  offers: Offer[],
+  now: Date,
+): ProductFactWithOffer {
   const etaLabel = etaLabelFor(merchant, p);
   const liveOffer = liveOfferFor(p, offers, now);
   return {
@@ -301,7 +376,10 @@ export function toProductCard(fact: ProductFact): ProductCard {
 
 const WEEKDAYS: Weekday[] = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
 
-function hoursToday(m: Merchant, now: Date): { day: Weekday; intervals: Array<{ open: string; close: string }> } | undefined {
+function hoursToday(
+  m: Merchant,
+  now: Date,
+): { day: Weekday; intervals: Array<{ open: string; close: string }> } | undefined {
   const hours = m.openingHours;
   if (!hours) return undefined;
   let local: Date;
@@ -320,7 +398,10 @@ function hoursToday(m: Merchant, now: Date): { day: Weekday; intervals: Array<{ 
  * trimmed from the end (marking its parent `truncated: true`). Returns the compacted value too so
  * callers emit cards for exactly what the model can see.
  */
-export function compactValue<T>(value: T, maxChars = MAX_TOOL_RESULT_CHARS): { json: string; value: T } {
+export function compactValue<T>(
+  value: T,
+  maxChars = MAX_TOOL_RESULT_CHARS,
+): { json: string; value: T } {
   let current: unknown = value;
   let json = JSON.stringify(current);
   const stages: Array<(v: unknown) => unknown> = [
@@ -367,9 +448,18 @@ function shrinkStrings(value: unknown, descLen: number, dropImages: boolean): un
 type Path = Array<string | number>;
 
 /** The non-empty array closest to the root (ties: the longest). Lists of results live near the top. */
-function largestShallowArray(value: unknown, path: Path = [], best: { path: Path; size: number } | null = null): { path: Path; size: number } | null {
+function largestShallowArray(
+  value: unknown,
+  path: Path = [],
+  best: { path: Path; size: number } | null = null,
+): { path: Path; size: number } | null {
   if (Array.isArray(value)) {
-    if (value.length > 0 && (!best || path.length < best.path.length || (path.length === best.path.length && value.length > best.size))) {
+    if (
+      value.length > 0 &&
+      (!best ||
+        path.length < best.path.length ||
+        (path.length === best.path.length && value.length > best.size))
+    ) {
       best = { path, size: value.length };
     }
     value.forEach((v, i) => {
@@ -378,7 +468,8 @@ function largestShallowArray(value: unknown, path: Path = [], best: { path: Path
     return best;
   }
   if (value && typeof value === "object") {
-    for (const [k, v] of Object.entries(value as Record<string, unknown>)) best = largestShallowArray(v, [...path, k], best);
+    for (const [k, v] of Object.entries(value as Record<string, unknown>))
+      best = largestShallowArray(v, [...path, k], best);
   }
   return best;
 }
@@ -391,7 +482,11 @@ function trimArrayAt(value: unknown, path: Path): unknown {
   }
   if (value && typeof value === "object") {
     const record = value as Record<string, unknown>;
-    return { ...record, [head as string]: trimArrayAt(record[head as string], rest), ...(rest.length === 0 ? { truncated: true } : {}) };
+    return {
+      ...record,
+      [head as string]: trimArrayAt(record[head as string], rest),
+      ...(rest.length === 0 ? { truncated: true } : {}),
+    };
   }
   return value;
 }
@@ -405,7 +500,11 @@ function scopedMerchantId(ctx: ToolContext): string | undefined {
 }
 
 /** Cards for exactly the products that survived compaction (the ones the model can quote). */
-function emitProductCards(ctx: ToolContext, facts: ProductFactWithOffer[], kept: Array<{ id: string }>): void {
+function emitProductCards(
+  ctx: ToolContext,
+  facts: ProductFactWithOffer[],
+  kept: Array<{ id: string }>,
+): void {
   const ids = new Set(kept.map((p) => p.id));
   const cards = facts.filter((f) => ids.has(f.id)).map(toProductCard);
   if (cards.length) ctx.emit({ type: "cards", products: cards });
@@ -419,7 +518,10 @@ export const searchMerchants: AiTool = defineTool({
     "Find places in the city (restaurants, stores, venues) by text, type, category, tags, price level or open-now. Returns up to 8 merchants with district, open status and delivery/pickup ETA. Results render as cards for the user.",
   schema: searchMerchantsSchema,
   execute: async (input, ctx) => {
-    const merchants = await ctx.ds.searchMerchants({ ...input, limit: Math.min(input.limit ?? MAX_MERCHANTS, MAX_MERCHANTS) });
+    const merchants = await ctx.ds.searchMerchants({
+      ...input,
+      limit: Math.min(input.limit ?? MAX_MERCHANTS, MAX_MERCHANTS),
+    });
     const geo = await geoFor(ctx);
     const cards = merchants.map((m) => toMerchantCard(m, ctx.now));
     const { json, value } = compactValue({
@@ -430,7 +532,9 @@ export const searchMerchants: AiTool = defineTool({
         tags: m.tags,
         description: trimText(m.description, 160),
       })),
-      ...(cards.length === 0 ? { note: "No merchants matched. Relax a filter or search products directly." } : {}),
+      ...(cards.length === 0
+        ? { note: "No merchants matched. Relax a filter or search products directly." }
+        : {}),
     });
     const shown = new Set(value.merchants.map((m) => m.id));
     if (shown.size) ctx.emit({ type: "cards", merchants: cards.filter((c) => shown.has(c.id)) });
@@ -447,15 +551,25 @@ export const searchProducts: AiTool = defineTool({
     const pinned = scopedMerchantId(ctx);
     const products = await ctx.ds.searchProducts({
       ...input,
-      ...(pinned ? { merchantIds: [pinned] } : input.merchantIds ? { merchantIds: input.merchantIds } : {}),
+      ...(pinned
+        ? { merchantIds: [pinned] }
+        : input.merchantIds
+          ? { merchantIds: input.merchantIds }
+          : {}),
       limit: Math.min(input.limit ?? MAX_PRODUCTS, MAX_PRODUCTS),
     });
     const geo = await geoFor(ctx);
-    const facts = products.map((p) => toProductFact(p, geo.merchantById.get(p.merchantId), geo.offers, ctx.now));
+    const facts = products.map((p) =>
+      toProductFact(p, geo.merchantById.get(p.merchantId), geo.offers, ctx.now),
+    );
     const { json, value } = compactValue({
       count: facts.length,
       products: facts,
-      ...(facts.length === 0 ? { note: "Nothing matched. Try fewer filters, a higher price ceiling or a broader query, then offer the closest real alternative." } : {}),
+      ...(facts.length === 0
+        ? {
+            note: "Nothing matched. Try fewer filters, a higher price ceiling or a broader query, then offer the closest real alternative.",
+          }
+        : {}),
     });
     emitProductCards(ctx, facts, value.products);
     return json;
@@ -470,10 +584,15 @@ export const getMerchant: AiTool = defineTool({
   execute: async (input, ctx) => {
     const pinned = scopedMerchantId(ctx);
     if (pinned && input.merchantId !== pinned) {
-      return errorResult("Only this merchant is available here. Point the user to the city concierge for other places.");
+      return errorResult(
+        "Only this merchant is available here. Point the user to the city concierge for other places.",
+      );
     }
     const m = await ctx.ds.getMerchant(input.merchantId);
-    if (!m) return errorResult(`Unknown merchant id "${input.merchantId}". Use search_merchants to find real ids.`);
+    if (!m)
+      return errorResult(
+        `Unknown merchant id "${input.merchantId}". Use search_merchants to find real ids.`,
+      );
     const [products, offers, events, geo] = await Promise.all([
       ctx.ds.listProducts(m.id),
       ctx.ds.listOffers(m.id),
@@ -497,9 +616,30 @@ export const getMerchant: AiTool = defineTool({
         timezone: m.openingHours?.timezone ?? null,
         hoursToday: today ? { day: today.day, intervals: today.intervals } : null,
         fulfillment: {
-          ...(f.delivery?.enabled ? { delivery: { feeCents: f.delivery.feeCents, eta: `${range(f.delivery.minutesMin, f.delivery.minutesMax, "min")}` } } : {}),
-          ...(f.pickup?.enabled ? { pickup: { feeCents: 0, eta: `${range(f.pickup.minutesMin, f.pickup.minutesMax, "min")}` } } : {}),
-          ...(f.shipping?.enabled ? { shipping: { feeCents: f.shipping.feeCents, eta: `${range(f.shipping.daysMin, f.shipping.daysMax, "day")}` } } : {}),
+          ...(f.delivery?.enabled
+            ? {
+                delivery: {
+                  feeCents: f.delivery.feeCents,
+                  eta: `${range(f.delivery.minutesMin, f.delivery.minutesMax, "min")}`,
+                },
+              }
+            : {}),
+          ...(f.pickup?.enabled
+            ? {
+                pickup: {
+                  feeCents: 0,
+                  eta: `${range(f.pickup.minutesMin, f.pickup.minutesMax, "min")}`,
+                },
+              }
+            : {}),
+          ...(f.shipping?.enabled
+            ? {
+                shipping: {
+                  feeCents: f.shipping.feeCents,
+                  eta: `${range(f.shipping.daysMin, f.shipping.daysMax, "day")}`,
+                },
+              }
+            : {}),
           ...(f.booking?.enabled ? { booking: { slotMinutes: f.booking.slotMinutes } } : {}),
         },
         liveOffers: offers.map((o) => ({
@@ -514,7 +654,14 @@ export const getMerchant: AiTool = defineTool({
         upcomingEvents: events
           .filter((e) => e.merchantId === m.id)
           .slice(0, 5)
-          .map((e) => ({ id: e.id, title: e.title, kind: e.kind, status: e.status, startsAt: e.startsAt, endsAt: e.endsAt })),
+          .map((e) => ({
+            id: e.id,
+            title: e.title,
+            kind: e.kind,
+            status: e.status,
+            startsAt: e.startsAt,
+            endsAt: e.endsAt,
+          })),
         topProducts: top,
       },
     });
@@ -545,11 +692,21 @@ export const getEvents: AiTool = defineTool({
         title: e.title,
         description: trimText(e.description, 160),
         kind: e.kind,
-        status: e.status,
+        status: eventPhase(e, ctx.now.getTime()),
         startsAt: e.startsAt,
         endsAt: e.endsAt,
-        ...(e.merchantId ? { merchantId: e.merchantId, merchantName: geo.merchantById.get(e.merchantId)?.name ?? null } : {}),
-        ...(e.districtId ? { districtId: e.districtId, districtName: geo.districtById.get(e.districtId)?.name ?? null } : {}),
+        ...(e.merchantId
+          ? {
+              merchantId: e.merchantId,
+              merchantName: geo.merchantById.get(e.merchantId)?.name ?? null,
+            }
+          : {}),
+        ...(e.districtId
+          ? {
+              districtId: e.districtId,
+              districtName: geo.districtById.get(e.districtId)?.name ?? null,
+            }
+          : {}),
         ...(e.productId ? { productId: e.productId } : {}),
       })),
       ...(events.length === 0 ? { note: "Nothing scheduled in that window." } : {}),
@@ -575,7 +732,10 @@ export const navigate: AiTool = defineTool({
       name = (await ctx.ds.getEvent(target.eventId))?.title;
       if (!name) return errorResult(`Unknown event id "${target.eventId}".`);
     }
-    ctx.emit({ type: "action", action: { type: "navigate", target, mode: input.mode, label: input.label || name } });
+    ctx.emit({
+      type: "action",
+      action: { type: "navigate", target, mode: input.mode, label: input.label || name },
+    });
     return input.mode === "teleport"
       ? `Navigation offered to the user (they confirm teleports). Destination: ${name}.`
       : `Waypoint to ${name} offered to the user.`;
@@ -591,7 +751,9 @@ export const proposeCart: AiTool = defineTool({
     const pinned = scopedMerchantId(ctx);
     const ids = [...new Set(input.items.map((i) => i.productId))];
     const products = await ctx.ds.getProducts(ids);
-    const productsById: Record<string, Product | undefined> = Object.fromEntries(products.map((p) => [p.id, p]));
+    const productsById: Record<string, Product | undefined> = Object.fromEntries(
+      products.map((p) => [p.id, p]),
+    );
     const rejected: Array<{ productId: string; reason: string }> = [];
     const lines: CartLine[] = [];
     const selections = new Map<string, Record<string, string>>();
@@ -599,7 +761,10 @@ export const proposeCart: AiTool = defineTool({
     for (const item of input.items) {
       const product = productsById[item.productId];
       if (!product) {
-        rejected.push({ productId: item.productId, reason: "Unknown product id; use ids from search results." });
+        rejected.push({
+          productId: item.productId,
+          reason: "Unknown product id; use ids from search results.",
+        });
         continue;
       }
       if (pinned && product.merchantId !== pinned) {
@@ -614,7 +779,10 @@ export const proposeCart: AiTool = defineTool({
           .filter((g) => g.required)
           .map((g) => `${g.id}: ${g.options.map((o) => o.id).join("|")}`)
           .join("; ");
-        rejected.push({ productId: item.productId, reason: groups ? `${problem} Options → ${groups}` : problem });
+        rejected.push({
+          productId: item.productId,
+          reason: groups ? `${problem} Options → ${groups}` : problem,
+        });
         continue;
       }
       const key = lineKey(product.id, selection);
@@ -623,14 +791,23 @@ export const proposeCart: AiTool = defineTool({
         existing.quantity = Math.min(10, existing.quantity + item.quantity);
         continue;
       }
-      lines.push({ key, productId: product.id, merchantId: product.merchantId, quantity: item.quantity, variantSelection: selection });
+      lines.push({
+        key,
+        productId: product.id,
+        merchantId: product.merchantId,
+        quantity: item.quantity,
+        variantSelection: selection,
+      });
       selections.set(key, selection);
     }
 
     const merchantIds = [...new Set(lines.map((l) => l.merchantId))];
     const merchants = await Promise.all(merchantIds.map((id) => ctx.ds.getMerchant(id)));
     const merchantsById: Record<string, Merchant | undefined> = {};
-    const fulfillment: Record<string, "delivery" | "pickup" | "shipping" | "booking" | "ticket" | "digital" | "lead"> = {};
+    const fulfillment: Record<
+      string,
+      "delivery" | "pickup" | "shipping" | "booking" | "ticket" | "digital" | "lead"
+    > = {};
     merchantIds.forEach((id, i) => {
       const merchant = merchants[i] ?? undefined;
       merchantsById[id] = merchant;
@@ -642,7 +819,10 @@ export const proposeCart: AiTool = defineTool({
     });
     const offerLists = await Promise.all(merchantIds.map((id) => ctx.ds.listOffers(id)));
     const offers = offerLists.flat();
-    const totals = computeTotals(lines, productsById, merchantsById, fulfillment, { offers, now: ctx.now });
+    const totals = computeTotals(lines, productsById, merchantsById, fulfillment, {
+      offers,
+      now: ctx.now,
+    });
 
     for (const problem of totals.problems) {
       const line = lines.find((l) => l.key === problem.key);
@@ -671,7 +851,9 @@ export const proposeCart: AiTool = defineTool({
           items: accepted.map((a) => ({
             productId: a.productId,
             quantity: a.quantity,
-            ...(Object.keys(a.variantSelection).length ? { variantSelection: a.variantSelection } : {}),
+            ...(Object.keys(a.variantSelection).length
+              ? { variantSelection: a.variantSelection }
+              : {}),
           })),
           ...(input.note ? { note: input.note } : {}),
         },
@@ -679,7 +861,16 @@ export const proposeCart: AiTool = defineTool({
       const geo = await geoFor(ctx);
       ctx.emit({
         type: "cards",
-        products: accepted.map((a) => toProductCard(toProductFact(productsById[a.productId]!, geo.merchantById.get(productsById[a.productId]!.merchantId), offers, ctx.now))),
+        products: accepted.map((a) =>
+          toProductCard(
+            toProductFact(
+              productsById[a.productId]!,
+              geo.merchantById.get(productsById[a.productId]!.merchantId),
+              offers,
+              ctx.now,
+            ),
+          ),
+        ),
       });
     }
 
@@ -697,8 +888,13 @@ export const proposeCart: AiTool = defineTool({
         type: b.type,
         feeCents: b.feeCents,
       })),
-      appliedOffers: totals.appliedOffers.map((a) => ({ title: a.title, discountCents: a.discountCents })),
-      ...(accepted.length ? { note: "Accepted items were added to the user's cart; they review and pay at checkout." } : {}),
+      appliedOffers: totals.appliedOffers.map((a) => ({
+        title: a.title,
+        discountCents: a.discountCents,
+      })),
+      ...(accepted.length
+        ? { note: "Accepted items were added to the user's cart; they review and pay at checkout." }
+        : {}),
     });
   },
 });
@@ -710,10 +906,17 @@ export const escalateToHuman: AiTool = defineTool({
   schema: escalateSchema,
   execute: async (input, ctx) => {
     const pinned = scopedMerchantId(ctx);
-    if (pinned && input.merchantId !== pinned) return errorResult("You can only escalate to this merchant.");
-    const [merchant, employee] = await Promise.all([ctx.ds.getMerchant(input.merchantId), ctx.ds.getEmployee(input.merchantId)]);
+    if (pinned && input.merchantId !== pinned)
+      return errorResult("You can only escalate to this merchant.");
+    const [merchant, employee] = await Promise.all([
+      ctx.ds.getMerchant(input.merchantId),
+      ctx.ds.getEmployee(input.merchantId),
+    ]);
     if (!merchant) return errorResult(`Unknown merchant id "${input.merchantId}".`);
-    ctx.emit({ type: "action", action: { type: "escalate", merchantId: merchant.id, reason: input.reason } });
+    ctx.emit({
+      type: "action",
+      action: { type: "escalate", merchantId: merchant.id, reason: input.reason },
+    });
     const enabled = Boolean(employee?.escalation.enabled);
     return JSON.stringify({
       ok: true,
@@ -735,19 +938,40 @@ export const recommendItems: AiTool = defineTool({
   schema: recommendItemsSchema,
   execute: async (input, ctx) => {
     const pinned = scopedMerchantId(ctx);
-    const products = (await ctx.ds.getProducts(input.productIds)).filter((p) => !pinned || p.merchantId === pinned);
+    const products = (await ctx.ds.getProducts(input.productIds)).filter(
+      (p) => !pinned || p.merchantId === pinned,
+    );
     const geo = await geoFor(ctx);
-    const facts = products.map((p) => toProductFact(p, geo.merchantById.get(p.merchantId), geo.offers, ctx.now));
+    const facts = products.map((p) =>
+      toProductFact(p, geo.merchantById.get(p.merchantId), geo.offers, ctx.now),
+    );
     const missing = input.productIds.filter((id) => !products.some((p) => p.id === id));
-    const { json, value } = compactValue({ count: facts.length, products: facts, ...(missing.length ? { unknownIds: missing } : {}) });
+    const { json, value } = compactValue({
+      count: facts.length,
+      products: facts,
+      ...(missing.length ? { unknownIds: missing } : {}),
+    });
     emitProductCards(ctx, facts, value.products);
     return json;
   },
 });
 
 /** Deterministic order matters for prompt caching: never reorder or filter per request. */
-export const conciergeTools: AiTool[] = [searchMerchants, searchProducts, getMerchant, getEvents, navigate, proposeCart];
-export const employeeTools: AiTool[] = [recommendItems, searchProducts, getMerchant, proposeCart, escalateToHuman];
+export const conciergeTools: AiTool[] = [
+  searchMerchants,
+  searchProducts,
+  getMerchant,
+  getEvents,
+  navigate,
+  proposeCart,
+];
+export const employeeTools: AiTool[] = [
+  recommendItems,
+  searchProducts,
+  getMerchant,
+  proposeCart,
+  escalateToHuman,
+];
 
 export function toolsFor(scope: ChatScope): AiTool[] {
   return scope === "employee" ? employeeTools : conciergeTools;

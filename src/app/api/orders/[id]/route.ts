@@ -1,7 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getDataSource } from "@/lib/data";
 import { getCurrentUser } from "@/lib/auth/session";
-import { authorizeOrderAccess, publicOrder, refreshOrderStatus } from "@/lib/commerce/service";
+import {
+  authorizeOrderAccess,
+  orderRewards,
+  publicOrder,
+  refreshOrderStatus,
+} from "@/lib/commerce/service";
+import { requestNow } from "@/lib/time/serverClock";
 import { orderIdSchema, orderTokenSchema } from "@/lib/commerce/validation";
 import { forbidden, jsonError, notFound } from "@/lib/commerce/http";
 import type { OrderResponse } from "@/lib/commerce/types";
@@ -25,9 +31,10 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   if (!authorizeOrderAccess(order, { userId: user?.id, token })) return forbidden();
 
   try {
-    const fresh = await refreshOrderStatus(order, new Date(), ds);
+    const fresh = await refreshOrderStatus(order, requestNow(req), ds);
+    const rewards = await orderRewards(fresh, ds);
     return NextResponse.json<OrderResponse>(
-      { order: publicOrder(fresh) },
+      { order: publicOrder(fresh), rewards },
       { headers: { "cache-control": "no-store" } },
     );
   } catch (err) {

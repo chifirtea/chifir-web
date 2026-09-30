@@ -2,6 +2,7 @@ import "server-only";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import type {
   CartLine,
+  DigitalReward,
   FulfillmentSelection,
   FulfillmentType,
   Merchant,
@@ -11,6 +12,7 @@ import type {
   PaymentProvider,
   Product,
 } from "@/types/domain";
+import { isEventLive } from "@/lib/events/status";
 import type { CreateOrderInput, DataSource } from "@/lib/data/types";
 import { getDataSource } from "@/lib/data";
 import type { CheckoutRequestInput } from "@/lib/validation/checkout";
@@ -87,6 +89,8 @@ export interface CreateCheckoutOrderInput {
   userId?: string | undefined;
   /** Which rail will collect payment. Decided by the route from feature flags. */
   paymentProvider?: PaymentProvider;
+  /** The request's clock (`requestNow`), so availability windows agree with what the client saw. */
+  now?: Date;
 }
 
 export interface CreateCheckoutOrderResult {
@@ -156,6 +160,7 @@ export async function createCheckoutOrder(
 
   const totals = computeTotals(lines, productsById, merchantsById, fulfillment, {
     offers,
+    now: input.now ?? new Date(),
     ...(body.promoCode ? { promoCode: body.promoCode } : {}),
   });
   if (totals.problems.length > 0) {
@@ -185,6 +190,7 @@ export async function createCheckoutOrder(
       variantSelection: line.variantSelection,
       ...(label ? { variantLabel: label } : {}),
       ...(product.digitalRewardId ? { digitalRewardId: product.digitalRewardId } : {}),
+      ...(product.eventId ? { eventId: product.eventId } : {}),
     };
   });
 
@@ -239,6 +245,35 @@ function distinct(values: Array<string | undefined>): string[] {
 }
 
 /**
+ * Every digital reward an order entitles its buyer to: the products' own twins plus the reward of
+ * any event the order bought into while it was live. Pure over the order + catalog, so the order
+ * page can show a guest exactly what they earned before they sign in and claim it.
+ */
+export async function orderRewardIds(
+  order: Order,
+  ds: DataSource = getDataSource(),
+): Promise<string[]> {
+  const ids = distinct(order.items.map((i) => i.digitalRewardId));
+  const paidAt = order.paidAt ? Date.parse(order.paidAt) : Date.parse(order.placedAt);
+  for (const eventId of distinct(order.items.map((i) => i.eventId))) {
+    const event = await ds.getEvent(eventId);
+    if (event?.rewardId && isEventLive(event, paidAt) && !ids.includes(event.rewardId))
+      ids.push(event.rewardId);
+  }
+  return ids;
+}
+
+/** Resolved rewards for a paid order (empty until it is paid). */
+export async function orderRewards(
+  order: Order,
+  ds: DataSource = getDataSource(),
+): Promise<DigitalReward[]> {
+  if (!PAID_ORDER_STATUSES.has(order.status)) return [];
+  const ids = await orderRewardIds(order, ds);
+  return ids.length ? ds.getRewards(ids) : [];
+}
+
+/**
  * Grants the order's digital twins and purchase XP to a user. Idempotent: `grantReward` upserts
  * and `addXp` is keyed by (user, reason, order). Safe to call from the webhook and from a later claim.
  */
@@ -248,7 +283,7 @@ export async function grantOrderRewards(
   ds: DataSource = getDataSource(),
 ): Promise<void> {
   if (!PAID_ORDER_STATUSES.has(order.status)) return;
-  for (const rewardId of distinct(order.items.map((i) => i.digitalRewardId))) {
+  for (const rewardId of await orderRewardIds(order, ds)) {
     await ds.grantReward(userId, rewardId, order.id);
   }
   await ds.addXp(
@@ -307,7 +342,31 @@ export async function completeOrder(
     anonymousId: order.anonymousId ?? "server",
     ...(order.userId ? { userId: order.userId } : {}),
   };
-  await ds.recordAnalytics([record]);
+  const records: AnalyticsRecord[] = [record];
+  const paidAt = order.paidAt ? Date.parse(order.paidAt) : now.getTime();
+  for (const eventId of distinct(order.items.map((i) => i.eventId))) {
+    const event = await ds.getEvent(eventId);
+    if (!event || event.kind !== "launch") continue;
+    const items = order.items.filter((i) => i.eventId === eventId);
+    records.push({
+      name: "drop_purchased",
+      props: {
+        eventId,
+        orderId: order.id,
+        productIds: distinct(items.map((i) => i.productId)),
+        totalCents: items.reduce(
+          (sum, i) => sum + i.unitPriceCents * i.quantity - i.discountCents,
+          0,
+        ),
+        live: isEventLive(event, paidAt),
+      },
+      ts: Date.now(),
+      sessionId: order.sessionId ?? "server",
+      anonymousId: order.anonymousId ?? "server",
+      ...(order.userId ? { userId: order.userId } : {}),
+    });
+  }
+  await ds.recordAnalytics(records);
 
   const fresh = (await ds.getOrder(order.id)) ?? order;
   return refreshOrderStatus(fresh, now, ds);

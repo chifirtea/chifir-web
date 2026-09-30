@@ -8,6 +8,7 @@ import { merchantsInDistrict, type CityIndex } from "@/city/cityIndex";
 import { useCityStore } from "@/city/cityStore";
 import { useWorldStore } from "@/engine/store/worldStore";
 import { track } from "@/lib/analytics/client";
+import { eventPhase as livePhase } from "@/lib/events/status";
 import { cn } from "@/lib/utils/cn";
 import type { CityEvent, District, Merchant, NavTarget, Parcel } from "@/types/domain";
 import { fulfillmentEtaLabel, openNowStatus, priceLevelLabel } from "./openNow";
@@ -312,7 +313,12 @@ function EventRow({
   const toggle = () => {
     const next = !expanded;
     setExpanded(next);
-    if (next) track("event_viewed", { eventId: event.id });
+    if (next)
+      track("event_viewed", {
+        eventId: event.id,
+        phase: livePhase(event, now.getTime()),
+        source: "panel",
+      });
   };
   return (
     <li className="border-b border-line px-5 py-3 last:border-b-0">

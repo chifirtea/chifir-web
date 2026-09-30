@@ -27,15 +27,26 @@ export const chatRequestSchema = z.object({
     .refine((msgs) => msgs.reduce((n, m) => n + m.content.length, 0) <= MAX_CHAT_TOTAL_CHARS, {
       message: "Conversation too long",
     })
-    .refine((msgs) => msgs[msgs.length - 1]?.role === "user", { message: "Last message must be from the user" }),
+    .refine((msgs) => msgs[msgs.length - 1]?.role === "user", {
+      message: "Last message must be from the user",
+    }),
   context: z.object({
     location: z.discriminatedUnion("kind", [
       z.object({ kind: z.literal("street") }),
-      z.object({ kind: z.literal("interior"), merchantId: z.string().min(1) }),
+      z.object({
+        kind: z.literal("interior"),
+        merchantId: z.string().min(1),
+        parcelId: z.string().min(1).max(64).optional(),
+      }),
     ]),
     cart: z.object({
       lines: z
-        .array(z.object({ productId: z.string().min(1).max(64), quantity: z.number().int().min(1).max(99) }))
+        .array(
+          z.object({
+            productId: z.string().min(1).max(64),
+            quantity: z.number().int().min(1).max(99),
+          }),
+        )
         .max(50),
     }),
     localTime: z.string().max(40).optional(),

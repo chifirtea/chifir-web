@@ -19,17 +19,30 @@ export function resolveNavTarget(target: NavTarget, index: CityIndex): ResolvedT
       const merchant = index.merchantsById[target.merchantId];
       const parcel = index.parcelByMerchant[target.merchantId];
       if (!merchant || !parcel) return null;
-      const def = getStorefrontTemplate(merchant.storefrontTemplate);
+      const def = getStorefrontTemplate(parcel.storefrontTemplate ?? merchant.storefrontTemplate);
       return { pose: doorPose(parcel, def), label: merchant.name };
     }
     case "parcel": {
       const parcel = index.parcelsById[target.parcelId];
       if (!parcel) return null;
-      if (parcel.merchantId && index.merchantsById[parcel.merchantId]) {
-        return resolveNavTarget({ kind: "merchant", merchantId: parcel.merchantId }, index);
+      const merchant = parcel.merchantId ? index.merchantsById[parcel.merchantId] : undefined;
+      const occupiedNow = index.occupiedParcels.some((p) => p.id === parcel.id);
+      if (merchant && occupiedNow) {
+        const def = getStorefrontTemplate(parcel.storefrontTemplate ?? merchant.storefrontTemplate);
+        const event = index.eventByParcel[parcel.id];
+        const isPopup = parcel.id !== index.parcelByMerchant[merchant.id]?.id;
+        return {
+          pose: doorPose(parcel, def),
+          label: isPopup && event ? `${merchant.name} pop-up` : merchant.name,
+        };
       }
+      // Not open yet (a pop-up before its window) or truly empty: stand in front of the lot.
       const front = localToWorld(parcel, { x: 0, z: parcel.size.depth / 2 + 3 });
-      return { pose: { x: front.x, z: front.z, yaw: parcel.rotationY + Math.PI }, label: "Available lot" };
+      const event = index.eventByParcel[parcel.id];
+      return {
+        pose: { x: front.x, z: front.z, yaw: parcel.rotationY + Math.PI },
+        label: event ? event.title : "Available lot",
+      };
     }
     case "district": {
       const district = index.districtsById[target.districtId];

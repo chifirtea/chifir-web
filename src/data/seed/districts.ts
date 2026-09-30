@@ -1,5 +1,6 @@
 import type { District, Parcel } from "@/types/domain";
 import { sid } from "./ids";
+import { dropWindow } from "./time";
 
 export const districts: District[] = [
   {
@@ -82,29 +83,52 @@ function parcel(
  * Streets run along X at z = 0, 14 m wide. North-side parcels (negative Z) face +Z (rotation 0);
  * south-side parcels face -Z (rotation PI). Event Square is north of the plaza (negative Z).
  */
-export const parcels: Parcel[] = [
-  // Food Street — north side
-  parcel("fs-n1", "food-street", { x: 58, z: -14 }, 0, "standard", "ember-and-oak"),
-  parcel("fs-n2", "food-street", { x: 82, z: -14 }, 0, "standard", "kori-ramen"),
-  parcel("fs-n3", "food-street", { x: 106, z: -14 }, 0, "standard"),
-  parcel("fs-n4", "food-street", { x: 130, z: -15 }, 0, "corner", "la-dolce-sera"),
-  // Food Street — south side
-  parcel("fs-s1", "food-street", { x: 58, z: 14 }, Math.PI, "standard", "saffron-alley"),
-  parcel("fs-s2", "food-street", { x: 82, z: 14 }, Math.PI, "standard", "verde-bowl"),
-  parcel("fs-s3", "food-street", { x: 106, z: 14 }, Math.PI, "standard"),
-  parcel("fs-s4", "food-street", { x: 130, z: 15 }, Math.PI, "corner", undefined, true),
-  // Fashion Street — north side
-  parcel("fa-n1", "fashion-street", { x: -58, z: -14 }, 0, "standard", "atelier-mira"),
-  parcel("fa-n2", "fashion-street", { x: -84, z: -16 }, 0, "flagship", "northline-supply", true),
-  parcel("fa-n3", "fashion-street", { x: -112, z: -14 }, 0, "standard"),
-  // Fashion Street — south side
-  parcel("fa-s1", "fashion-street", { x: -58, z: 14 }, Math.PI, "standard", "bloom-and-co"),
-  parcel("fa-s2", "fashion-street", { x: -84, z: 14 }, Math.PI, "standard"),
-  parcel("fa-s3", "fashion-street", { x: -112, z: 10 }, Math.PI, "kiosk"),
-  // Event Square
-  parcel("es-venue", "event-square", { x: 0, z: -100 }, 0, "venue", "the-hall", true),
-  parcel("es-bb1", "event-square", { x: -34, z: -66 }, 0, "billboard"),
-  parcel("es-bb2", "event-square", { x: 34, z: -66 }, 0, "billboard"),
-  // Plaza kiosk (pop-up slot)
-  parcel("cp-k1", "central-plaza", { x: 22, z: -22 }, 0, "kiosk"),
-];
+export function buildParcels(now = new Date()): Parcel[] {
+  const drop = dropWindow(now);
+  return [
+    // Food Street — north side
+    parcel("fs-n1", "food-street", { x: 58, z: -14 }, 0, "standard", "ember-and-oak"),
+    parcel("fs-n2", "food-street", { x: 82, z: -14 }, 0, "standard", "kori-ramen"),
+    parcel("fs-n3", "food-street", { x: 106, z: -14 }, 0, "standard"),
+    parcel("fs-n4", "food-street", { x: 130, z: -15 }, 0, "corner", "la-dolce-sera"),
+    // Food Street — south side
+    parcel("fs-s1", "food-street", { x: 58, z: 14 }, Math.PI, "standard", "saffron-alley"),
+    parcel("fs-s2", "food-street", { x: 82, z: 14 }, Math.PI, "standard", "verde-bowl"),
+    parcel("fs-s3", "food-street", { x: 106, z: 14 }, Math.PI, "standard"),
+    parcel("fs-s4", "food-street", { x: 130, z: 15 }, Math.PI, "corner", undefined, true),
+    // Fashion Street — north side
+    parcel("fa-n1", "fashion-street", { x: -58, z: -14 }, 0, "standard", "atelier-mira"),
+    parcel("fa-n2", "fashion-street", { x: -84, z: -16 }, 0, "flagship", "northline-supply", true),
+    parcel("fa-n3", "fashion-street", { x: -112, z: -14 }, 0, "standard"),
+    // Fashion Street — south side
+    parcel("fa-s1", "fashion-street", { x: -58, z: 14 }, Math.PI, "standard", "bloom-and-co"),
+    parcel("fa-s2", "fashion-street", { x: -84, z: 14 }, Math.PI, "standard"),
+    parcel("fa-s3", "fashion-street", { x: -112, z: 10 }, Math.PI, "kiosk"),
+    // Event Square
+    parcel("es-venue", "event-square", { x: 0, z: -100 }, 0, "venue", "the-hall", true),
+    parcel("es-bb1", "event-square", { x: -34, z: -66 }, 0, "billboard"),
+    parcel("es-bb2", "event-square", { x: 34, z: -66 }, 0, "billboard"),
+    // Event Square pop-up lot: rented by the drop's brand for the drop window only. It faces +X,
+    // toward the square's centre, so a crowd in front of it is also in front of The Hall.
+    {
+      ...parcel(
+        "es-pop1",
+        "event-square",
+        { x: -38, z: -92 },
+        Math.PI / 2,
+        "standard",
+        "northline-supply",
+        true,
+      ),
+      occupiedFrom: drop.start.toISOString(),
+      occupiedUntil: drop.end.toISOString(),
+      storefrontTemplate: "popup",
+      interiorTemplate: "popup-gallery",
+    },
+    // Plaza kiosk (pop-up slot)
+    parcel("cp-k1", "central-plaza", { x: 22, z: -22 }, 0, "kiosk"),
+  ];
+}
+
+/** Parcels for the real clock (seed script, tests). */
+export const parcels: Parcel[] = buildParcels();

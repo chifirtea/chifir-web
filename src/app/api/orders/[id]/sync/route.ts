@@ -8,6 +8,7 @@ import {
   completeOrder,
   publicOrder,
   refreshOrderStatus,
+  orderRewards,
 } from "@/lib/commerce/service";
 import { orderIdSchema, orderTokenBodySchema } from "@/lib/commerce/validation";
 import { forbidden, jsonError, notFound, parseBody } from "@/lib/commerce/http";
@@ -50,8 +51,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       }
     }
     const fresh = await refreshOrderStatus(order, new Date(), ds);
+    const rewards = await orderRewards(fresh, ds);
     return NextResponse.json<OrderResponse>(
-      { order: publicOrder(fresh) },
+      { order: publicOrder(fresh), rewards },
       { headers: { "cache-control": "no-store" } },
     );
   } catch (err) {

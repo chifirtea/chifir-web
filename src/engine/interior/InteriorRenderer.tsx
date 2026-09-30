@@ -4,7 +4,7 @@ import { useEffect, useMemo } from "react";
 import * as THREE from "three";
 import type { Merchant, Parcel } from "@/types/domain";
 import { useCityStore } from "@/city/cityStore";
-import type { CityIndex } from "@/city/cityIndex";
+import { productsAtParcel, type CityIndex } from "@/city/cityIndex";
 import { useQuality } from "@/engine/canvas/qualityStore";
 import type { QualitySettings } from "@/engine/canvas/quality";
 import { useSceneAtmosphere } from "@/engine/environment/atmosphere";
@@ -23,24 +23,43 @@ import "./templates";
 
 const BACKDROP = "#06070b";
 
-export function InteriorRenderer({ merchantId }: { merchantId: string }) {
+export function InteriorRenderer({
+  merchantId,
+  parcelId,
+}: {
+  merchantId: string;
+  parcelId?: string;
+}) {
   const index = useCityStore((s) => s.index);
   const merchant = index?.merchantsById[merchantId];
-  const parcel = index?.parcelByMerchant[merchantId];
-  if (!index || !merchant || !parcel) return null;
+  const parcel =
+    (parcelId ? index?.parcelsById[parcelId] : undefined) ?? index?.parcelByMerchant[merchantId];
+  if (!index || !merchant || !parcel || parcel.merchantId !== merchantId) return null;
   return <InteriorContent index={index} merchant={merchant} parcel={parcel} />;
 }
 
-function InteriorContent({ index, merchant, parcel }: { index: CityIndex; merchant: Merchant; parcel: Parcel }) {
+function InteriorContent({
+  index,
+  merchant,
+  parcel,
+}: {
+  index: CityIndex;
+  merchant: Merchant;
+  parcel: Parcel;
+}) {
   const quality = useQuality();
   const setColliders = useColliderStore((s) => s.setColliders);
   const clearColliders = useColliderStore((s) => s.clearColliders);
   const setHotspots = useHotspotStore((s) => s.setHotspots);
   const clearHotspots = useHotspotStore((s) => s.clearHotspots);
 
-  const def = getInteriorTemplate(merchant.interiorTemplate);
+  const def = getInteriorTemplate(parcel.interiorTemplate ?? merchant.interiorTemplate);
   const origin = useMemo(() => interiorOriginFor(parcel), [parcel]);
-  const products = useMemo(() => orderProducts(index.productsByMerchant[merchant.id] ?? [], def.productSlots.length), [index, merchant.id, def]);
+  // A pop-up shows its event's collection; the permanent store shows the whole catalog.
+  const products = useMemo(
+    () => orderProducts(productsAtParcel(index, parcel), def.productSlots.length),
+    [index, parcel, def],
+  );
   const employee = index.employeesByMerchant[merchant.id] ?? null;
 
   useSceneAtmosphere(BACKDROP, { color: BACKDROP, near: 24, far: 70 });
@@ -95,7 +114,12 @@ function InteriorContent({ index, merchant, parcel }: { index: CityIndex; mercha
     <group position={[origin.x, 0, origin.z]}>
       <InteriorRig def={def} quality={quality} />
       <Backdrop />
-      <Template merchant={merchant} products={products} employee={employee} quality={quality.tier} />
+      <Template
+        merchant={merchant}
+        products={products}
+        employee={employee}
+        quality={quality.tier}
+      />
     </group>
   );
 }
@@ -108,13 +132,33 @@ function InteriorRig({ def, quality }: { def: InteriorTemplateDef; quality: Qual
     <group>
       <ambientLight color="#ffe9d2" intensity={0.35} />
       <hemisphereLight args={["#ffe2c0", "#2a2420", 0.55]} />
-      <pointLight position={[0, H - 0.4, D * 0.15]} color="#ffdcb4" intensity={38} distance={20} decay={2} castShadow={quality.tier === "high"} shadow-mapSize-width={Math.min(1024, quality.shadowMapSize)} shadow-mapSize-height={Math.min(1024, quality.shadowMapSize)} shadow-bias={-0.002} />
-      <pointLight position={[0, H - 0.4, -D * 0.3]} color="#ffd2a1" intensity={24} distance={18} decay={2} />
+      <pointLight
+        position={[0, H - 0.4, D * 0.15]}
+        color="#ffdcb4"
+        intensity={38}
+        distance={20}
+        decay={2}
+        castShadow={quality.tier === "high"}
+        shadow-mapSize-width={Math.min(1024, quality.shadowMapSize)}
+        shadow-mapSize-height={Math.min(1024, quality.shadowMapSize)}
+        shadow-bias={-0.002}
+      />
+      <pointLight
+        position={[0, H - 0.4, -D * 0.3]}
+        color="#ffd2a1"
+        intensity={24}
+        distance={18}
+        decay={2}
+      />
     </group>
   );
 }
 
-const backdropMaterial = new THREE.MeshBasicMaterial({ color: BACKDROP, side: THREE.BackSide, fog: false });
+const backdropMaterial = new THREE.MeshBasicMaterial({
+  color: BACKDROP,
+  side: THREE.BackSide,
+  fog: false,
+});
 const backdropGeometry = new THREE.SphereGeometry(80, 12, 8);
 
 function Backdrop() {

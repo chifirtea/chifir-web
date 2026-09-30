@@ -1,5 +1,6 @@
 "use client";
 
+import { clockHeaders, initClientClock } from "@/lib/time/clientClock";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -190,9 +191,17 @@ export function OrderStatus({
   const base = `/api/orders/${encodeURIComponent(order.id)}`;
   const tokenQuery = token ? `?t=${encodeURIComponent(token)}` : "";
 
+  // Keep the tab's demo clock (if any) so a rehearsed drop purchase reads consistently here too.
+  useEffect(() => {
+    initClientClock();
+  }, []);
+
   const refresh = useCallback(async () => {
     try {
-      const res = await fetch(`${base}${tokenQuery}`, { cache: "no-store" });
+      const res = await fetch(`${base}${tokenQuery}`, {
+        cache: "no-store",
+        headers: clockHeaders(),
+      });
       if (!res.ok) throw new Error(String(res.status));
       const data = (await res.json()) as OrderResponse;
       setOrder(data.order);

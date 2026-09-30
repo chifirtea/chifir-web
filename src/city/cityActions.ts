@@ -1,5 +1,7 @@
 import type { AIAction } from "@/lib/ai/actions";
 import { track } from "@/lib/analytics/client";
+import { eventPhase } from "@/lib/events/status";
+import { now as clockNow } from "@/lib/time/clock";
 import type { Hotspot } from "@/engine/interaction/hotspots";
 import { interiorOriginFor } from "@/engine/interior/types";
 import { getInteriorTemplate } from "@/engine/interior/registry";
@@ -56,27 +58,46 @@ export function guideTo(target: NavTarget, source: "ai" | "hud"): boolean {
   return true;
 }
 
-export function enterMerchant(merchantId: string, via: "door" | "teleport" | "deep_link"): boolean {
+/**
+ * Enters a merchant's room. `parcelId` picks which of the merchant's occupied parcels (its store
+ * or its event pop-up); it defaults to the permanent storefront.
+ */
+export function enterMerchant(
+  merchantId: string,
+  via: "door" | "teleport" | "deep_link",
+  parcelId?: string,
+): boolean {
   const index = getCityIndex();
   const merchant = index?.merchantsById[merchantId];
   if (!index || !merchant) return false;
-  const parcel = index.parcelByMerchant[merchantId];
-  if (!parcel) return false;
-  const def = getInteriorTemplate(merchant.interiorTemplate);
+  const parcel = parcelId ? index.parcelsById[parcelId] : index.parcelByMerchant[merchantId];
+  if (!parcel || parcel.merchantId !== merchantId) return false;
+  if (!index.occupiedParcels.some((p) => p.id === parcel.id)) return false;
+  const def = getInteriorTemplate(parcel.interiorTemplate ?? merchant.interiorTemplate);
   const origin = interiorOriginFor(parcel);
   const spawn: PlayerPose = {
     x: origin.x + def.spawn.x,
     z: origin.z + def.spawn.z,
     yaw: def.spawn.yaw,
   };
-  const ok = beginMove(spawn, { kind: "interior", merchantId });
+  const ok = beginMove(spawn, { kind: "interior", merchantId, parcelId: parcel.id });
   if (ok) {
     enteredAt = Date.now();
     const world = useWorldStore.getState();
-    if (world.waypoint?.target.kind === "merchant" && world.waypoint.target.merchantId === merchantId) {
+    const wp = world.waypoint?.target;
+    if (
+      (wp?.kind === "merchant" && wp.merchantId === merchantId) ||
+      (wp?.kind === "parcel" && wp.parcelId === parcel.id) ||
+      (wp?.kind === "event" && index.eventsById[wp.eventId]?.parcelId === parcel.id)
+    ) {
       world.setWaypoint(null);
     }
     track("store_entered", { merchantId, via });
+    const event = index.eventByParcel[parcel.id];
+    if (event && parcel.id !== index.parcelByMerchant[merchantId]?.id) {
+      const phase = eventPhase(event, clockNow());
+      if (phase !== "ended") track("event_joined", { eventId: event.id, phase, via: "popup" });
+    }
   }
   return ok;
 }
@@ -85,8 +106,10 @@ export function exitInterior(): boolean {
   const index = getCityIndex();
   const world = useWorldStore.getState();
   if (!index || world.location.kind !== "interior") return false;
-  const merchantId = world.location.merchantId;
-  const resolved = resolveNavTarget({ kind: "merchant", merchantId }, index);
+  const { merchantId, parcelId } = world.location;
+  const resolved =
+    resolveNavTarget({ kind: "parcel", parcelId }, index) ??
+    resolveNavTarget({ kind: "merchant", merchantId }, index);
   const pose = resolved?.pose ?? index.snapshot.districts[0]?.spawnPoint ?? { x: 0, z: 0, yaw: 0 };
   const ok = beginMove(pose, { kind: "street" });
   if (ok) {
@@ -117,17 +140,30 @@ export function talkToEmployee(merchantId: string): boolean {
 export function interactWithHotspot(hotspot: Hotspot): boolean {
   switch (hotspot.kind) {
     case "door":
-      return hotspot.payload.merchantId ? enterMerchant(hotspot.payload.merchantId, "door") : false;
+      return hotspot.payload.merchantId
+        ? enterMerchant(hotspot.payload.merchantId, "door", hotspot.payload.parcelId)
+        : false;
     case "exit":
       return exitInterior();
     case "product":
-      return hotspot.payload.productId ? inspectProduct(hotspot.payload.productId, "interior") : false;
+      return hotspot.payload.productId
+        ? inspectProduct(hotspot.payload.productId, "interior")
+        : false;
     case "employee":
       return hotspot.payload.merchantId ? talkToEmployee(hotspot.payload.merchantId) : false;
-    case "event":
+    case "event": {
       useWorldStore.getState().setPlacesOpen(true);
-      if (hotspot.payload.eventId) track("event_viewed", { eventId: hotspot.payload.eventId });
+      const event = hotspot.payload.eventId
+        ? getCityIndex()?.eventsById[hotspot.payload.eventId]
+        : undefined;
+      if (event)
+        track("event_viewed", {
+          eventId: event.id,
+          phase: eventPhase(event, clockNow()),
+          source: "hotspot",
+        });
       return true;
+    }
     case "info":
       useWorldStore.getState().setPlacesOpen(true);
       return true;
@@ -142,7 +178,8 @@ export function executeAIAction(action: AIAction): boolean {
   let accepted = false;
   switch (action.type) {
     case "navigate":
-      accepted = action.mode === "teleport" ? teleportTo(action.target, "ai") : guideTo(action.target, "ai");
+      accepted =
+        action.mode === "teleport" ? teleportTo(action.target, "ai") : guideTo(action.target, "ai");
       break;
     case "propose_cart": {
       const index = getCityIndex();

@@ -1,4 +1,4 @@
-import type { Order } from "@/types/domain";
+import type { DigitalReward, Order } from "@/types/domain";
 
 /**
  * Client-safe commerce contracts. This file imports nothing server-only, so client components
@@ -34,6 +34,8 @@ export interface CommerceErrorResponse {
 
 export interface OrderResponse {
   order: PublicOrder;
+  /** Digital twins and event rewards this order earned. Empty until paid. */
+  rewards: DigitalReward[];
 }
 
 export interface ClaimResponse {

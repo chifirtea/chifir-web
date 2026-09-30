@@ -1,20 +1,38 @@
 import type { Offer } from "@/types/domain";
 import { sid } from "./ids";
-import { CITY_TZ, addDays, todayAt } from "./time";
+import { NIGHT_SHIFT_SLUGS } from "./products";
+import { CITY_TZ, addDays, dropWindow, todayAt } from "./time";
 
 /**
  * Every offer here is real and applied by `computeTotals`. Never seed a promotion the checkout
  * cannot honour.
  */
 export function buildOffers(now = new Date()): Offer[] {
+  const drop = dropWindow(now);
   return [
+    {
+      id: sid.offer("northline-night-shift-launch"),
+      slug: "northline-night-shift-launch",
+      merchantId: sid.merchant("northline-supply"),
+      scope: { productIds: NIGHT_SHIFT_SLUGS.map((slug) => sid.product("northline-supply", slug)) },
+      title: "Night Shift launch: 10% off the collection",
+      description:
+        "10% off every Night Shift hoodie while the pop-up is open (8 to 10 PM). Applied automatically at checkout.",
+      kind: "percent_off",
+      value: 10,
+      startsAt: drop.start.toISOString(),
+      endsAt: drop.end.toISOString(),
+      redemptionsCount: 0,
+      active: true,
+    },
     {
       id: sid.offer("ember-burger-rush"),
       slug: "ember-burger-rush",
       merchantId: sid.merchant("ember-and-oak"),
       scope: { categories: ["burgers"] },
       title: "Burger Rush: 20% off burgers",
-      description: "20% off every burger ordered for delivery or pickup between 5 and 9 PM. Applied automatically at checkout.",
+      description:
+        "20% off every burger ordered for delivery or pickup between 5 and 9 PM. Applied automatically at checkout.",
       kind: "percent_off",
       value: 20,
       startsAt: todayAt(CITY_TZ, 17, 0, now).toISOString(),

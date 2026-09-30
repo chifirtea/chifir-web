@@ -1,11 +1,16 @@
 "use client";
 
+import { clockHeaders } from "@/lib/time/clientClock";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AIAction, ChatRequest, ChatScope, ChatStreamEvent } from "@/lib/ai/actions";
 import { parseSseChunk } from "@/lib/ai/sse";
 import { track } from "@/lib/analytics/client";
 import { randomId } from "@/lib/utils/ids";
-import { MAX_CHAT_MESSAGES, MAX_CHAT_MESSAGE_CHARS, MAX_CHAT_TOTAL_CHARS } from "@/lib/validation/ai";
+import {
+  MAX_CHAT_MESSAGES,
+  MAX_CHAT_MESSAGE_CHARS,
+  MAX_CHAT_TOTAL_CHARS,
+} from "@/lib/validation/ai";
 import { useWorldStore } from "@/engine/store/worldStore";
 import { useCartStore } from "@/features/cart/cartStore";
 import { executeAIAction } from "@/city/cityActions";
@@ -75,23 +80,35 @@ export function windowHistory(messages: UiMessage[], next: string): ChatRequest[
   const history = messages
     .filter((m) => !m.local && !m.error && m.text.trim().length > 0)
     .map((m) => ({ role: m.role, content: m.text.slice(0, MAX_CHAT_MESSAGE_CHARS) }));
-  const out = [...history.slice(-(MAX_CHAT_MESSAGES - 1)), { role: "user" as const, content: next.slice(0, MAX_CHAT_MESSAGE_CHARS) }];
-  while (out.length > 1 && out.reduce((n, m) => n + m.content.length, 0) > MAX_CHAT_TOTAL_CHARS) out.shift();
+  const out = [
+    ...history.slice(-(MAX_CHAT_MESSAGES - 1)),
+    { role: "user" as const, content: next.slice(0, MAX_CHAT_MESSAGE_CHARS) },
+  ];
+  while (out.length > 1 && out.reduce((n, m) => n + m.content.length, 0) > MAX_CHAT_TOTAL_CHARS)
+    out.shift();
   return out;
 }
 
-function mergeCards(current: UiMessage["cards"], incoming: Extract<ChatStreamEvent, { type: "cards" }>): UiMessage["cards"] {
+function mergeCards(
+  current: UiMessage["cards"],
+  incoming: Extract<ChatStreamEvent, { type: "cards" }>,
+): UiMessage["cards"] {
   const merchants = [...(current?.merchants ?? [])];
-  for (const m of incoming.merchants ?? []) if (!merchants.some((x) => x.id === m.id)) merchants.push(m);
+  for (const m of incoming.merchants ?? [])
+    if (!merchants.some((x) => x.id === m.id)) merchants.push(m);
   const products = [...(current?.products ?? [])];
-  for (const p of incoming.products ?? []) if (!products.some((x) => x.id === p.id)) products.push(p);
+  for (const p of incoming.products ?? [])
+    if (!products.some((x) => x.id === p.id)) products.push(p);
   return {
     ...(merchants.length ? { merchants } : {}),
     ...(products.length ? { products } : {}),
   };
 }
 
-export function useChatStream(endpoint: string, options: UseChatStreamOptions): UseChatStreamResult {
+export function useChatStream(
+  endpoint: string,
+  options: UseChatStreamOptions,
+): UseChatStreamResult {
   const { scope, merchantId } = options;
   const [messages, setMessages] = useState<UiMessage[]>(() => options.initialMessages ?? []);
   const [status, setStatus] = useState<ChatStatus>("idle");
@@ -133,15 +150,27 @@ export function useChatStream(endpoint: string, options: UseChatStreamOptions): 
         .map((l) => ({ productId: l.productId, quantity: Math.min(99, Math.max(1, l.quantity)) }));
       const body: ChatRequest = {
         messages: history,
-        context: { location: world.location, cart: { lines: cartLines }, localTime: localIsoWithOffset(new Date()) },
+        context: {
+          location: world.location,
+          cart: { lines: cartLines },
+          localTime: localIsoWithOffset(new Date()),
+        },
         ...(merchantId ? { merchantId } : {}),
         ...(conversationIdRef.current ? { conversationId: conversationIdRef.current } : {}),
       };
 
       setError(undefined);
       setStatus("streaming");
-      setMessages((prev) => [...prev, userMessage, { id: assistantId, role: "assistant", text: "" }]);
-      track("ai_message_sent", { scope, ...(merchantId ? { merchantId } : {}), chars: text.length });
+      setMessages((prev) => [
+        ...prev,
+        userMessage,
+        { id: assistantId, role: "assistant", text: "" },
+      ]);
+      track("ai_message_sent", {
+        scope,
+        ...(merchantId ? { merchantId } : {}),
+        chars: text.length,
+      });
 
       const fail = (err: ChatError) => {
         setError(err);
@@ -159,13 +188,16 @@ export function useChatStream(endpoint: string, options: UseChatStreamOptions): 
             break;
           case "action": {
             // Cart proposals were validated server-side; apply them exactly once, on arrival.
-            const executed = event.action.type === "propose_cart" ? executeAIAction(event.action) : undefined;
+            const executed =
+              event.action.type === "propose_cart" ? executeAIAction(event.action) : undefined;
             patchAssistant(assistantId, (m) => {
               const index = m.actions?.length ?? 0;
               return {
                 ...m,
                 actions: [...(m.actions ?? []), event.action],
-                ...(executed !== undefined ? { executed: { ...(m.executed ?? {}), [index]: executed } } : {}),
+                ...(executed !== undefined
+                  ? { executed: { ...(m.executed ?? {}), [index]: executed } }
+                  : {}),
               };
             });
             break;
@@ -191,12 +223,23 @@ export function useChatStream(endpoint: string, options: UseChatStreamOptions): 
       try {
         const res = await fetch(endpoint, {
           method: "POST",
-          headers: { "content-type": "application/json", accept: "text/event-stream" },
+          headers: {
+            "content-type": "application/json",
+            accept: "text/event-stream",
+            ...clockHeaders(),
+          },
           body: JSON.stringify(body),
           signal: controller.signal,
         });
         if (!res.ok || !res.body) {
-          let code: ChatErrorCode = res.status === 429 ? "rate_limited" : res.status === 503 ? "unavailable" : res.status === 400 ? "bad_request" : "internal";
+          let code: ChatErrorCode =
+            res.status === 429
+              ? "rate_limited"
+              : res.status === 503
+                ? "unavailable"
+                : res.status === 400
+                  ? "bad_request"
+                  : "internal";
           let message = FRIENDLY[res.status] ?? "Something went wrong on our side. Try again.";
           try {
             const data = (await res.json()) as Partial<ChatError>;

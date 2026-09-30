@@ -8,6 +8,7 @@ import type {
   DigitalReward,
   District,
   Merchant,
+  MerchantDraft,
   Offer,
   Order,
   OrderFulfillment,
@@ -25,11 +26,15 @@ import type {
   CreateOrderInput,
   DataSource,
   EventListParams,
+  MerchantDraftInput,
   MerchantSearchParams,
   OrderPatch,
   ProductSearchParams,
 } from "./types";
+import { draftPublishProblem, rowsFromDraft } from "./drafts";
+import { toEmployeeRow, toMerchantDraftRow, toMerchantRow, toProductRow } from "./rows";
 import { filterMerchants, filterProducts } from "./search";
+import { eventPhase } from "@/lib/events/status";
 
 type Row = Record<string, any>;
 
@@ -67,6 +72,8 @@ export function rowToParcel(r: Row): Parcel {
     ...(r.merchant_id ? { merchantId: r.merchant_id } : {}),
     ...(r.occupied_from ? { occupiedFrom: r.occupied_from } : {}),
     ...(r.occupied_until ? { occupiedUntil: r.occupied_until } : {}),
+    ...(r.storefront_template ? { storefrontTemplate: r.storefront_template } : {}),
+    ...(r.interior_template ? { interiorTemplate: r.interior_template } : {}),
     sponsored: Boolean(r.sponsored),
   };
 }
@@ -150,7 +157,9 @@ export function rowToProduct(r: Row): Product {
     images: r.images ?? [],
     ...(r.model_3d_url ? { model3dUrl: r.model_3d_url } : {}),
     inventoryStatus: r.inventory_status,
-    ...(r.inventory_count !== null && r.inventory_count !== undefined ? { inventoryCount: r.inventory_count } : {}),
+    ...(r.inventory_count !== null && r.inventory_count !== undefined
+      ? { inventoryCount: r.inventory_count }
+      : {}),
     variantGroups: r.variant_groups ?? [],
     attributes: r.attributes ?? {},
     tags: r.tags ?? [],
@@ -158,6 +167,8 @@ export function rowToProduct(r: Row): Product {
     leadTime: r.lead_time ?? {},
     ...(r.digital_reward_id ? { digitalRewardId: r.digital_reward_id } : {}),
     ...(r.event_id ? { eventId: r.event_id } : {}),
+    ...(r.available_from ? { availableFrom: r.available_from } : {}),
+    ...(r.available_until ? { availableUntil: r.available_until } : {}),
     featured: Boolean(r.featured),
     sortOrder: r.sort_order ?? 0,
     active: Boolean(r.active),
@@ -171,6 +182,8 @@ export function rowToReward(r: Row): DigitalReward {
     name: r.name,
     description: r.description ?? "",
     kind: r.kind,
+    ...(r.avatar_slot ? { avatarSlot: r.avatar_slot } : {}),
+    ...(r.appearance ? { appearance: r.appearance } : {}),
     ...(r.asset_url ? { assetUrl: r.asset_url } : {}),
     ...(r.preview_image_url ? { previewImageUrl: r.preview_image_url } : {}),
     rarity: r.rarity,
@@ -210,11 +223,30 @@ export function rowToEvent(r: Row): CityEvent {
     ...(r.parcel_id ? { parcelId: r.parcel_id } : {}),
     ...(r.offer_id ? { offerId: r.offer_id } : {}),
     ...(r.product_id ? { productId: r.product_id } : {}),
+    productIds: r.product_ids ?? [],
     ...(r.reward_id ? { rewardId: r.reward_id } : {}),
     startsAt: r.starts_at,
     endsAt: r.ends_at,
+    ...(r.capacity !== null && r.capacity !== undefined ? { capacity: r.capacity } : {}),
     ...(r.hero_image_url ? { heroImageUrl: r.hero_image_url } : {}),
+    ...(r.hero_video_url ? { heroVideoUrl: r.hero_video_url } : {}),
+    ...(r.livestream_url ? { livestreamUrl: r.livestream_url } : {}),
     config: r.config ?? {},
+  };
+}
+
+export function rowToMerchantDraft(r: Row): MerchantDraft {
+  return {
+    id: r.id,
+    sourceUrl: r.source_url,
+    status: r.status,
+    extraction: r.extraction ?? {},
+    proposal: r.proposal,
+    ...(r.placement ? { placement: r.placement } : {}),
+    ...(r.reviewer_notes ? { reviewerNotes: r.reviewer_notes } : {}),
+    ...(r.published_merchant_id ? { publishedMerchantId: r.published_merchant_id } : {}),
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
   };
 }
 
@@ -234,6 +266,7 @@ export function rowToOrderItem(r: Row): OrderItem {
     variantSelection: r.variant_selection ?? {},
     ...(r.variant_label ? { variantLabel: r.variant_label } : {}),
     ...(r.digital_reward_id ? { digitalRewardId: r.digital_reward_id } : {}),
+    ...(r.event_id ? { eventId: r.event_id } : {}),
   };
 }
 
@@ -275,7 +308,9 @@ export function rowToOrder(r: Row, items: Row[], fulfillments: Row[]): Order {
     ...(r.session_id ? { sessionId: r.session_id } : {}),
     ...(r.anonymous_id ? { anonymousId: r.anonymous_id } : {}),
     paymentProvider: r.payment_provider,
-    ...(r.stripe_checkout_session_id ? { stripeCheckoutSessionId: r.stripe_checkout_session_id } : {}),
+    ...(r.stripe_checkout_session_id
+      ? { stripeCheckoutSessionId: r.stripe_checkout_session_id }
+      : {}),
     ...(r.stripe_payment_intent_id ? { stripePaymentIntentId: r.stripe_payment_intent_id } : {}),
     items: items.map(rowToOrderItem),
     fulfillments: fulfillments.map(rowToFulfillment),
@@ -311,17 +346,27 @@ export class SupabaseDataSource implements DataSource {
   private async loadCatalog(): Promise<CitySnapshot> {
     if (this.catalog && Date.now() - this.catalog.at < CATALOG_TTL_MS) return this.catalog.snapshot;
     const db = this.db;
-    const [districts, parcels, merchants, employees, products, events, offers, rewards] = await Promise.all([
-      db.from("districts").select("*").order("sort_order"),
-      db.from("parcels").select("*"),
-      db.from("merchants").select("*").eq("status", "published"),
-      db.from("ai_employees").select("*"),
-      db.from("products").select("*").eq("active", true).order("sort_order"),
-      db.from("events").select("*").neq("status", "cancelled").order("starts_at"),
-      db.from("offers").select("*").eq("active", true),
-      db.from("digital_rewards").select("*"),
-    ]);
-    for (const [name, res] of Object.entries({ districts, parcels, merchants, employees, products, events, offers, rewards })) {
+    const [districts, parcels, merchants, employees, products, events, offers, rewards] =
+      await Promise.all([
+        db.from("districts").select("*").order("sort_order"),
+        db.from("parcels").select("*"),
+        db.from("merchants").select("*").eq("status", "published"),
+        db.from("ai_employees").select("*"),
+        db.from("products").select("*").eq("active", true).order("sort_order"),
+        db.from("events").select("*").neq("status", "cancelled").order("starts_at"),
+        db.from("offers").select("*").eq("active", true),
+        db.from("digital_rewards").select("*"),
+      ]);
+    for (const [name, res] of Object.entries({
+      districts,
+      parcels,
+      merchants,
+      employees,
+      products,
+      events,
+      offers,
+      rewards,
+    })) {
       if (res.error) fail(`load ${name}`, res.error);
     }
     const publishedIds = new Set((merchants.data ?? []).map((m: Row) => m.id));
@@ -329,8 +374,12 @@ export class SupabaseDataSource implements DataSource {
       districts: (districts.data ?? []).map(rowToDistrict),
       parcels: (parcels.data ?? []).map(rowToParcel),
       merchants: (merchants.data ?? []).map(rowToMerchant),
-      products: (products.data ?? []).filter((p: Row) => publishedIds.has(p.merchant_id)).map(rowToProduct),
-      employees: (employees.data ?? []).filter((e: Row) => publishedIds.has(e.merchant_id)).map(rowToPublicEmployee),
+      products: (products.data ?? [])
+        .filter((p: Row) => publishedIds.has(p.merchant_id))
+        .map(rowToProduct),
+      employees: (employees.data ?? [])
+        .filter((e: Row) => publishedIds.has(e.merchant_id))
+        .map(rowToPublicEmployee),
       events: (events.data ?? []).map(rowToEvent),
       offers: (offers.data ?? []).map(rowToOffer),
       rewards: (rewards.data ?? []).map(rowToReward),
@@ -351,7 +400,9 @@ export class SupabaseDataSource implements DataSource {
     return (await this.loadCatalog()).districts;
   }
   async listParcels(districtId?: string): Promise<Parcel[]> {
-    return (await this.loadCatalog()).parcels.filter((p) => !districtId || p.districtId === districtId);
+    return (await this.loadCatalog()).parcels.filter(
+      (p) => !districtId || p.districtId === districtId,
+    );
   }
   async listMerchants(): Promise<Merchant[]> {
     return (await this.loadCatalog()).merchants;
@@ -400,15 +451,21 @@ export class SupabaseDataSource implements DataSource {
   }
   /** Full employee config: server-only, read fresh (never cached in the public snapshot). */
   async getEmployee(merchantId: string): Promise<AiEmployee | null> {
-    const { data, error } = await this.db.from("ai_employees").select("*").eq("merchant_id", merchantId).maybeSingle();
+    const { data, error } = await this.db
+      .from("ai_employees")
+      .select("*")
+      .eq("merchant_id", merchantId)
+      .maybeSingle();
     if (error) fail("getEmployee", error);
     return data ? rowToEmployee(data) : null;
   }
   async listEvents(params: EventListParams = {}): Promise<CityEvent[]> {
     const from = params.from ? Date.parse(params.from) : null;
     const to = params.to ? Date.parse(params.to) : null;
+    const now = Date.now();
     return (await this.loadCatalog()).events
-      .filter((e) => !params.status || params.status.includes(e.status))
+      .filter((e) => e.status !== "cancelled")
+      .filter((e) => !params.status || params.status.includes(eventPhase(e, now)))
       .filter((e) => from === null || Date.parse(e.endsAt) >= from)
       .filter((e) => to === null || Date.parse(e.startsAt) <= to)
       .slice(0, params.limit ?? 50);
@@ -419,7 +476,10 @@ export class SupabaseDataSource implements DataSource {
   async listOffers(merchantId?: string): Promise<Offer[]> {
     const now = Date.now();
     return (await this.loadCatalog()).offers.filter(
-      (o) => (!merchantId || o.merchantId === merchantId) && Date.parse(o.startsAt) <= now && Date.parse(o.endsAt) >= now,
+      (o) =>
+        (!merchantId || o.merchantId === merchantId) &&
+        Date.parse(o.startsAt) <= now &&
+        Date.parse(o.endsAt) >= now,
     );
   }
   async getRewards(ids: string[]): Promise<DigitalReward[]> {
@@ -470,6 +530,7 @@ export class SupabaseDataSource implements DataSource {
         variant_selection: i.variantSelection,
         variant_label: i.variantLabel ?? null,
         digital_reward_id: i.digitalRewardId ?? null,
+        event_id: i.eventId ?? null,
       })),
     );
     if (itemsError) fail("createOrder items", itemsError);
@@ -506,8 +567,10 @@ export class SupabaseDataSource implements DataSource {
   async updateOrder(id: string, patch: OrderPatch): Promise<Order> {
     const update: Row = {};
     if (patch.status !== undefined) update.status = patch.status;
-    if (patch.stripeCheckoutSessionId !== undefined) update.stripe_checkout_session_id = patch.stripeCheckoutSessionId;
-    if (patch.stripePaymentIntentId !== undefined) update.stripe_payment_intent_id = patch.stripePaymentIntentId;
+    if (patch.stripeCheckoutSessionId !== undefined)
+      update.stripe_checkout_session_id = patch.stripeCheckoutSessionId;
+    if (patch.stripePaymentIntentId !== undefined)
+      update.stripe_payment_intent_id = patch.stripePaymentIntentId;
     if (patch.paidAt !== undefined) update.paid_at = patch.paidAt;
     if (patch.userId !== undefined) update.user_id = patch.userId;
     if (patch.deliveryAddress !== undefined) update.delivery_address = patch.deliveryAddress;
@@ -518,7 +581,10 @@ export class SupabaseDataSource implements DataSource {
     if (!order) throw new Error(`[supabase] updateOrder: order ${id} not found`);
     return order;
   }
-  async markOrderPaid(id: string, patch: { stripePaymentIntentId?: string; paidAt: string }): Promise<Order | null> {
+  async markOrderPaid(
+    id: string,
+    patch: { stripePaymentIntentId?: string; paidAt: string },
+  ): Promise<Order | null> {
     const { data, error } = await this.db.rpc("mark_order_paid", {
       p_order_id: id,
       p_payment_intent_id: patch.stripePaymentIntentId ?? null,
@@ -550,7 +616,9 @@ export class SupabaseDataSource implements DataSource {
     if (error) fail("listOrdersForUser", error);
     return Promise.all((data ?? []).map((o: Row) => this.hydrateOrder(o)));
   }
-  async upsertFulfillment(f: Omit<OrderFulfillment, "id"> & { id?: string }): Promise<OrderFulfillment> {
+  async upsertFulfillment(
+    f: Omit<OrderFulfillment, "id"> & { id?: string },
+  ): Promise<OrderFulfillment> {
     const row: Row = {
       ...(f.id ? { id: f.id } : {}),
       order_id: f.orderId,
@@ -587,12 +655,27 @@ export class SupabaseDataSource implements DataSource {
       .maybeSingle();
     if (error) fail("grantReward", error);
     if (data) {
-      return { userId: data.user_id, rewardId: data.reward_id, grantedAt: data.granted_at, ...(data.source_order_id ? { sourceOrderId: data.source_order_id } : {}) };
+      return {
+        userId: data.user_id,
+        rewardId: data.reward_id,
+        grantedAt: data.granted_at,
+        ...(data.source_order_id ? { sourceOrderId: data.source_order_id } : {}),
+      };
     }
-    const existing = await this.db.from("user_rewards").select("*").eq("user_id", userId).eq("reward_id", rewardId).single();
+    const existing = await this.db
+      .from("user_rewards")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("reward_id", rewardId)
+      .single();
     if (existing.error || !existing.data) fail("grantReward read", existing.error);
     const r = existing.data;
-    return { userId: r.user_id, rewardId: r.reward_id, grantedAt: r.granted_at, ...(r.source_order_id ? { sourceOrderId: r.source_order_id } : {}) };
+    return {
+      userId: r.user_id,
+      rewardId: r.reward_id,
+      grantedAt: r.granted_at,
+      ...(r.source_order_id ? { sourceOrderId: r.source_order_id } : {}),
+    };
   }
   async listUserRewards(userId: string): Promise<UserReward[]> {
     const { data, error } = await this.db.from("user_rewards").select("*").eq("user_id", userId);
@@ -605,23 +688,41 @@ export class SupabaseDataSource implements DataSource {
     }));
   }
   async getProfile(userId: string): Promise<Profile | null> {
-    const { data, error } = await this.db.from("profiles").select("*").eq("id", userId).maybeSingle();
+    const { data, error } = await this.db
+      .from("profiles")
+      .select("*")
+      .eq("id", userId)
+      .maybeSingle();
     if (error) fail("getProfile", error);
     return data ? rowToProfile(data) : null;
   }
-  async updateProfile(userId: string, patch: Partial<Omit<Profile, "id" | "createdAt">>): Promise<Profile> {
+  async updateProfile(
+    userId: string,
+    patch: Partial<Omit<Profile, "id" | "createdAt">>,
+  ): Promise<Profile> {
     const update: Row = {};
     if (patch.displayName !== undefined) update.display_name = patch.displayName;
     if (patch.avatar !== undefined) update.avatar = patch.avatar;
-    if (patch.dietaryPreferences !== undefined) update.dietary_preferences = patch.dietaryPreferences;
+    if (patch.dietaryPreferences !== undefined)
+      update.dietary_preferences = patch.dietaryPreferences;
     if (patch.defaultAddress !== undefined) update.default_address = patch.defaultAddress;
     if (patch.xp !== undefined) update.xp = patch.xp;
     if (patch.cityLevel !== undefined) update.city_level = patch.cityLevel;
-    const { data, error } = await this.db.from("profiles").update(update).eq("id", userId).select("*").single();
+    const { data, error } = await this.db
+      .from("profiles")
+      .update(update)
+      .eq("id", userId)
+      .select("*")
+      .single();
     if (error || !data) fail("updateProfile", error);
     return rowToProfile(data);
   }
-  async addXp(userId: string, amount: number, reason: string, sourceOrderId?: string): Promise<Profile> {
+  async addXp(
+    userId: string,
+    amount: number,
+    reason: string,
+    sourceOrderId?: string,
+  ): Promise<Profile> {
     const { data, error } = await this.db.rpc("add_xp", {
       p_user_id: userId,
       p_amount: amount,
@@ -664,7 +765,11 @@ export class SupabaseDataSource implements DataSource {
     if (!conversationId) {
       const { data, error } = await db
         .from("ai_conversations")
-        .insert({ user_id: input.userId ?? null, scope: input.scope, merchant_id: input.merchantId ?? null })
+        .insert({
+          user_id: input.userId ?? null,
+          scope: input.scope,
+          merchant_id: input.merchantId ?? null,
+        })
         .select("id")
         .single();
       if (error || !data) fail("ai_conversations insert", error);
@@ -682,5 +787,91 @@ export class SupabaseDataSource implements DataSource {
       if (error) fail("ai_messages insert", error);
     }
     return { conversationId };
+  }
+
+  // ------------------------------------------------------------------ admin (merchant generator)
+  async saveMerchantDraft(input: MerchantDraftInput): Promise<MerchantDraft> {
+    const now = new Date().toISOString();
+    const existing = input.id ? await this.getMerchantDraft(input.id) : null;
+    if (existing?.status === "published") throw new Error("A published draft cannot be edited.");
+    const draft: MerchantDraft = {
+      ...input,
+      id: input.id ?? crypto.randomUUID(),
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+    };
+    const { error } = await this.db
+      .from("merchant_drafts")
+      .upsert(toMerchantDraftRow(draft), { onConflict: "id" });
+    if (error) fail("saveMerchantDraft", error);
+    return draft;
+  }
+  async getMerchantDraft(id: string): Promise<MerchantDraft | null> {
+    const { data, error } = await this.db
+      .from("merchant_drafts")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+    if (error) fail("getMerchantDraft", error);
+    return data ? rowToMerchantDraft(data) : null;
+  }
+  async listMerchantDrafts(): Promise<MerchantDraft[]> {
+    const { data, error } = await this.db
+      .from("merchant_drafts")
+      .select("*")
+      .order("updated_at", { ascending: false })
+      .limit(100);
+    if (error) fail("listMerchantDrafts", error);
+    return (data ?? []).map(rowToMerchantDraft);
+  }
+  async publishMerchantDraft(id: string): Promise<{ merchantId: string }> {
+    const draft = await this.getMerchantDraft(id);
+    if (!draft) throw new Error(`Draft ${id} not found`);
+    const { data: parcelRow, error: parcelError } = await this.db
+      .from("parcels")
+      .select("*")
+      .eq("id", draft.placement?.parcelId ?? "")
+      .maybeSingle();
+    if (parcelError) fail("publishMerchantDraft parcel", parcelError);
+    const parcel = parcelRow ? rowToParcel(parcelRow) : undefined;
+    const problem = draftPublishProblem(draft, parcel);
+    if (problem || !parcel) throw new Error(problem ?? "Cannot publish this draft.");
+
+    const nowIso = new Date().toISOString();
+    const rows = rowsFromDraft(
+      draft,
+      parcel,
+      {
+        merchantId: crypto.randomUUID(),
+        employeeId: crypto.randomUUID(),
+        productId: () => crypto.randomUUID(),
+      },
+      nowIso,
+    );
+    const db = this.db;
+    const m = await db.from("merchants").insert(toMerchantRow(rows.merchant));
+    if (m.error) fail("publish merchant", m.error);
+    const e = await db.from("ai_employees").insert(toEmployeeRow(rows.employee));
+    if (e.error) fail("publish employee", e.error);
+    if (rows.products.length) {
+      const p = await db.from("products").insert(rows.products.map(toProductRow));
+      if (p.error) fail("publish products", p.error);
+    }
+    const pl = await db
+      .from("parcels")
+      .update({ status: "occupied", merchant_id: rows.merchant.id })
+      .eq("id", parcel.id)
+      .is("merchant_id", null)
+      .select("id");
+    if (pl.error) fail("publish parcel", pl.error);
+    if ((pl.data ?? []).length === 0)
+      throw new Error("The chosen parcel was taken while publishing.");
+    const d = await db
+      .from("merchant_drafts")
+      .update({ status: "published", published_merchant_id: rows.merchant.id, updated_at: nowIso })
+      .eq("id", id);
+    if (d.error) fail("publish draft", d.error);
+    this.invalidateCatalog();
+    return { merchantId: rows.merchant.id };
   }
 }

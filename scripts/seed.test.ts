@@ -31,7 +31,7 @@ const NOW = new Date("2026-09-30T20:00:00Z");
 const offers = buildOffers(NOW);
 const events = buildEvents(NOW);
 
-/** Columns per table, from supabase/migrations/0001_init.sql (excluding defaults the seed never sets). */
+/** Columns per table, from supabase/migrations/0001_init.sql + 0002_city_alive.sql (excluding defaults the seed never sets). */
 const COLUMNS: Record<string, string[]> = {
   districts: [
     "id",
@@ -57,6 +57,8 @@ const COLUMNS: Record<string, string[]> = {
     "merchant_id",
     "occupied_from",
     "occupied_until",
+    "storefront_template",
+    "interior_template",
     "sponsored",
     "created_at",
     "updated_at",
@@ -114,6 +116,8 @@ const COLUMNS: Record<string, string[]> = {
     "name",
     "description",
     "kind",
+    "avatar_slot",
+    "appearance",
     "asset_url",
     "preview_image_url",
     "rarity",
@@ -140,6 +144,8 @@ const COLUMNS: Record<string, string[]> = {
     "fulfillment_types",
     "lead_time",
     "digital_reward_id",
+    "available_from",
+    "available_until",
     "featured",
     "sort_order",
     "active",
@@ -178,10 +184,14 @@ const COLUMNS: Record<string, string[]> = {
     "parcel_id",
     "offer_id",
     "product_id",
+    "product_ids",
     "reward_id",
     "starts_at",
     "ends_at",
+    "capacity",
     "hero_image_url",
+    "hero_video_url",
+    "livestream_url",
     "config",
     "created_at",
     "updated_at",

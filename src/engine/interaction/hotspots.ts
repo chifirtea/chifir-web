@@ -13,6 +13,8 @@ export interface Hotspot {
   radius: number;
   payload: {
     merchantId?: Id;
+    /** For doors: which parcel's room to enter (pop-ups differ from the main store). */
+    parcelId?: Id;
     productId?: Id;
     eventId?: Id;
   };
