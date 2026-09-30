@@ -36,7 +36,7 @@ type BetaMessageParam = Anthropic.Beta.BetaMessageParam;
 type BetaTool = Anthropic.Beta.BetaTool;
 type BetaToolResultBlockParam = Anthropic.Beta.BetaToolResultBlockParam;
 type BetaToolUseBlock = Anthropic.Beta.BetaToolUseBlock;
-type BetaStreamParams = Anthropic.Beta.BetaMessageStreamParams;
+type BetaStreamParams = Anthropic.Beta.Messages.BetaMessageStreamParams;
 
 /** The slice of the SDK client the provider needs; tests inject a fake. */
 export interface StreamHandle {
@@ -69,7 +69,7 @@ export class AnthropicProvider implements LLMProvider {
     return {
       name: tool.name,
       description: tool.description,
-      input_schema: compileToolSchema(tool.schema) as BetaTool.InputSchema,
+      input_schema: compileToolSchema(tool.schema) as Anthropic.Beta.BetaTool.InputSchema,
       strict: true,
       eager_input_streaming: true,
     };

@@ -142,6 +142,7 @@ export function employeeSystemPrompt(merchant: Merchant, employee: AiEmployee, c
   }));
 
   return `You are ${employee.name}, ${employee.role} at ${merchant.name}, a real ${merchant.merchantType} in the city. A guest just walked in and is talking to you. Stay in character: you work at this one place.
+You already greeted the guest with: "${trimText(employee.greeting, 200)}" — do not repeat it.
 
 ## Persona (from the merchant's configuration)
 - Personality: ${trimText(employee.personality, 300)}

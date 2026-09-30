@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useState, type FormEvent, type InputHTMLAttributes } from "react";
+import { useId, useMemo, useState, type FormEvent, type InputHTMLAttributes } from "react";
 import { ArrowLeft } from "lucide-react";
 import type { Address, FulfillmentType } from "@/types/domain";
 import { Button, Drawer } from "@/components/ui";
@@ -73,17 +73,22 @@ export function CheckoutSheet({ open, onClose, onBack }: CheckoutSheetProps) {
   const [error, setError] = useState<string | null>(null);
   const [problems, setProblems] = useState<CheckoutProblem[]>([]);
 
-  useEffect(() => {
-    if (!open) return;
-    const saved = loadSaved();
-    if (saved) {
-      setContact(saved.contact);
-      setAddress(saved.address);
+  // On every open: prefill from the last order and clear stale errors. Runs in render on the
+  // open transition (never during SSR/hydration, where `open` is false), so no effect is needed.
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) {
+      const saved = loadSaved();
+      if (saved) {
+        setContact(saved.contact);
+        setAddress(saved.address);
+      }
+      setError(null);
+      setProblems([]);
+      setTouched(false);
     }
-    setError(null);
-    setProblems([]);
-    setTouched(false);
-  }, [open]);
+  }
 
   const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact.email.trim());
   const addressOk =

@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useMemo, useState, type FormEvent } from "react";
 import { ShoppingBag, Tag, X } from "lucide-react";
 import type { CartLine, FulfillmentType, Merchant, Product } from "@/types/domain";
-import { Button, Drawer, Price, ProductImage } from "@/components/ui";
+import { Button, Drawer, ProductImage } from "@/components/ui";
 import { cn } from "@/lib/utils/cn";
 import { formatCents } from "@/lib/utils/money";
 import { track } from "@/lib/analytics/client";
@@ -31,9 +31,12 @@ export function CartDrawer() {
   const [checkoutOpen, setCheckoutOpen] = useState(false);
 
   const close = useCallback(() => setCartOpen(false), [setCartOpen]);
-  useEffect(() => {
+  // Closing the cart (from anywhere, including closeAllPanels) also leaves the checkout step.
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
     if (!open) setCheckoutOpen(false);
-  }, [open]);
+  }
 
   const empty = linesByMerchant.length === 0;
   const canCheckout = ready && !empty && totals.problems.length === 0 && totals.lines.length > 0;
@@ -74,7 +77,7 @@ export function CartDrawer() {
             {linesByMerchant.map((group) => (
               <MerchantSection key={group.merchantId} group={group} view={view} />
             ))}
-            <PromoCode view={view} />
+            <PromoCode key={view.promoCode} view={view} />
             <Totals view={view} />
           </div>
         )}
@@ -230,8 +233,8 @@ function LineRow({
 function PromoCode({ view }: { view: ReturnType<typeof useCartTotals> }) {
   const { totals, promoCode, offers } = view;
   const setPromoCode = useFulfillmentStore((s) => s.setPromoCode);
+  // Remounted (via key) whenever the stored code changes, so the draft starts from it.
   const [draft, setDraft] = useState(promoCode);
-  useEffect(() => setDraft(promoCode), [promoCode]);
 
   const applied = useMemo(() => {
     if (!promoCode || totals.promoCodeApplied !== true) return null;

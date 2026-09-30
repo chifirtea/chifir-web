@@ -16,14 +16,16 @@ export function CartButton({ className }: { className?: string }) {
   const count = useCartStore(selectCartCount);
   const lastAddedAt = useCartStore((s) => s.lastAddedAt);
   const setCartOpen = useWorldStore((s) => s.setCartOpen);
-  const [pulse, setPulse] = useState(false);
+  // Pulse = "an add happened that the badge has not settled yet". Settling is async (timer),
+  // so nothing writes state synchronously inside the effect.
+  const [settledAt, setSettledAt] = useState(lastAddedAt);
+  const pulse = lastAddedAt > 0 && lastAddedAt !== settledAt;
 
   useEffect(() => {
-    if (!lastAddedAt) return;
-    setPulse(true);
-    const t = setTimeout(() => setPulse(false), 700);
+    if (!pulse) return;
+    const t = setTimeout(() => setSettledAt(lastAddedAt), 700);
     return () => clearTimeout(t);
-  }, [lastAddedAt]);
+  }, [pulse, lastAddedAt]);
 
   const shown = mounted ? count : 0;
   return (

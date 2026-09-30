@@ -30,11 +30,9 @@ export function ProductPanel() {
   const index = useCityStore((s) => s.index);
   const isPhone = useIsPhone();
 
-  // Keep the last product mounted while the drawer slides out.
+  // Keep the last product mounted while the drawer slides out (focusedId goes null first).
   const [shownId, setShownId] = useState<string | null>(focusedId);
-  useEffect(() => {
-    if (focusedId) setShownId(focusedId);
-  }, [focusedId]);
+  if (focusedId !== null && focusedId !== shownId) setShownId(focusedId);
 
   const product = shownId ? index?.productsById[shownId] : undefined;
   const merchant = product ? index?.merchantsById[product.merchantId] : undefined;
@@ -76,7 +74,7 @@ function ProductBody({ product, onViewCart }: { product: Product; onViewCart: ()
   const promoCode = useFulfillmentStore((s) => s.promoCode);
   const merchant = index?.merchantsById[product.merchantId];
   const reward = product.digitalRewardId ? index?.rewardsById[product.digitalRewardId] : undefined;
-  const offers = index?.offersByMerchant[product.merchantId] ?? [];
+  const merchantOffers = index?.offersByMerchant[product.merchantId];
 
   const [selection, setSelection] = useState<Record<string, string>>({});
   const [quantity, setQuantity] = useState(1);
@@ -90,7 +88,10 @@ function ProductBody({ product, onViewCart }: { product: Product; onViewCart: ()
   }, [addedAt]);
 
   const unit = unitPriceCents(product, selection);
-  const offer = useMemo(() => bestOfferFor(product, unit, offers, new Date(), promoCode || undefined), [product, unit, offers, promoCode]);
+  const offer = useMemo(
+    () => bestOfferFor(product, unit, merchantOffers ?? [], new Date(), promoCode || undefined),
+    [product, unit, merchantOffers, promoCode],
+  );
   const discount = offer ? unitDiscountCents(offer, unit) : 0;
   const problem = variantProblem(product, selection);
   const soldOut = product.inventoryStatus === "out_of_stock";

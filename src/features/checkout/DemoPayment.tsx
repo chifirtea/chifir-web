@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { FlaskConical } from "lucide-react";
 import type { CurrencyCode } from "@/types/domain";
 import { Button } from "@/components/ui";
@@ -16,6 +17,7 @@ export interface DemoPaymentProps {
 
 /** The "pay" button of the simulated rail. Clearly labelled: nothing is charged. */
 export function DemoPayment({ orderId, token, totalCents, currency }: DemoPaymentProps) {
+  const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,7 +36,7 @@ export function DemoPayment({ orderId, token, totalCents, currency }: DemoPaymen
         setBusy(false);
         return;
       }
-      window.location.assign(`/orders/${orderId}?t=${token}`);
+      router.push(`/orders/${orderId}?t=${token}`);
     } catch {
       setError("You appear to be offline. Check your connection and try again.");
       setBusy(false);
