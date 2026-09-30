@@ -84,6 +84,9 @@ the design system.
 ## QA hooks
 
 - `?quality=low|medium|high` on `/city` forces a render tier (also `localStorage.chifir.quality`).
+- `?clock=<ISO local time | +seconds | epoch ms>` shifts the city clock for the tab (countdowns, pop-ups, drop availability, checkout) outside production or with `ALLOW_CLOCK_OVERRIDE=1`.
+- `?perf=1` shows the developer performance HUD (FPS, frame p95, TTI, chunk load, memory, device) in any build.
+- `?party=<CODE>` joins a party (the Invite button in the HUD builds these links).
 - `?to=<merchant-slug>` / `?to=district:<slug>` / `?to=event:<slug>` deep-links to a place; `?ask=<text>` opens the concierge with a prompt.
 - In development builds `window.__chifirDebug` exposes the action bus (`teleportTo`, `enterMerchant`, `inspectFirstProduct`, …) so tests can open panels deterministically.
 - `pnpm e2e` runs the Playwright smoke suite against a dev server on `http://localhost:3100` (set `E2E_BASE_URL` to reuse a running one); `node scripts/visual-check.mjs` takes screenshots and reports console errors.

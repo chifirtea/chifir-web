@@ -102,12 +102,31 @@ AI_MODEL=claude-opus-5-5   # default; any model id the key can use
 Without a key the chat surfaces explain that the concierge is off. Every fact the model states
 comes from a tool call over the same `DataSource` the UI uses; the key never reaches the browser.
 
+## 4b. Rehearsing the drop, admin surfaces, presence (v0.2)
+
+- **City clock.** Every countdown, pop-up tenancy and product availability window reads one clock.
+  Outside production (or with `ALLOW_CLOCK_OVERRIDE=1` on a staging deployment) you can shift it:
+  `/city?clock=2026-10-01T19:59:30` (local wall time), `/city?clock=+900` (seconds from now) or an
+  epoch in ms. The offset sticks for the tab (checkout and the order page use it too), so a drop can
+  be rehearsed at any time of day. Production ignores the override unless explicitly enabled.
+- **Merchant generator.** `/admin/generate` is open on localhost and needs
+  `ADMIN_ACCESS_TOKEN` (≥16 chars, sent as a bearer token or stored in a cookie by
+  `POST /api/admin/session`) anywhere `NODE_ENV=production`. See docs/MERCHANT-GENERATOR.md.
+- **Presence.** With the public Supabase variables set, players in the same district or room see
+  each other through Supabase Realtime; without them, tabs of one browser see each other (local
+  development, static preview, tests). Nothing else to configure. `PRESENCE_ROOM_PREFIX` namespaces
+  rooms when several deployments share one project.
+- **Performance HUD.** `/city?perf=1` shows FPS, frame-time percentiles, TTI, 3D chunk load time,
+  memory (where the browser exposes it) and device/GPU info in any build. See docs/PERFORMANCE.md.
+
 ## 5. Deploying to Vercel
 
 - Import the repo; framework preset Next.js; build `pnpm build`.
 - Environment variables (Production and Preview):
   `NEXT_PUBLIC_APP_URL` (your https origin), the three Supabase variables, `STRIPE_SECRET_KEY`,
-  `STRIPE_WEBHOOK_SECRET`, `ANTHROPIC_API_KEY`, `AI_MODEL`, `COMMERCE_MODE`.
+  `STRIPE_WEBHOOK_SECRET`, `ANTHROPIC_API_KEY`, `AI_MODEL`, `COMMERCE_MODE`, and for v0.2
+  `ADMIN_ACCESS_TOKEN` (Production) and `ALLOW_CLOCK_OVERRIDE=1` (Preview only, to rehearse drops).
+- Apply both migrations (`supabase/migrations/0001_init.sql`, `0002_city_alive.sql`) in order.
 - Create a Stripe webhook endpoint (Developers → Webhooks) pointing at
   `https://<domain>/api/webhooks/stripe` for `checkout.session.completed`, and use its signing
   secret as `STRIPE_WEBHOOK_SECRET` (the CLI secret is for local forwarding only).
