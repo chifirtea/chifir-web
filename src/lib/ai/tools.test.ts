@@ -7,6 +7,7 @@ import type { ChatStreamEvent } from "./actions";
 import { compileToolSchema } from "./provider";
 import {
   compactJson,
+  compactValue,
   conciergeTools,
   employeeTools,
   escalateToHuman,
@@ -286,13 +287,33 @@ describe("employee-only tools", () => {
 });
 
 describe("compactJson", () => {
-  it("shrinks oversized results under the cap", () => {
+  it("shortens descriptions and drops images before trimming lists", () => {
     const big = { products: Array.from({ length: 40 }, (_, i) => ({ id: `p${i}`, description: "x".repeat(400), imageUrl: "https://example.com/very/long/url".repeat(3) })) };
     const json = compactJson(big, 6000);
     expect(json.length).toBeLessThanOrEqual(6000);
-    const parsed = JSON.parse(json) as { products: unknown[]; truncated?: boolean };
-    expect(parsed.products.length).toBeGreaterThan(0);
-    expect(parsed.truncated).toBe(true);
+    const parsed = JSON.parse(json) as { products: Array<{ id: string; description: string; imageUrl?: string }>; truncated?: boolean };
+    expect(parsed.products).toHaveLength(40);
+    expect(parsed.truncated).toBeUndefined();
+    expect(parsed.products[0]!.imageUrl).toBeUndefined();
+    expect(parsed.products[0]!.description.length).toBeLessThan(400);
+  });
+
+  it("trims the largest shallow list (even when nested) and never emits invalid JSON", () => {
+    const big = {
+      merchant: {
+        name: "x",
+        tags: ["a", "b", "c", "d", "e", "f", "g"],
+        topProducts: Array.from({ length: 300 }, (_, i) => ({ id: `p${i}`, variantGroups: [{ options: [1, 2, 3, 4, 5, 6, 7, 8, 9] }] })),
+      },
+    };
+    const { json, value } = compactValue(big, 4000);
+    expect(json.length).toBeLessThanOrEqual(4000);
+    const parsed = JSON.parse(json) as { merchant: { tags: string[]; topProducts: unknown[]; truncated?: boolean } };
+    expect(parsed.merchant.truncated).toBe(true);
+    expect(parsed.merchant.tags).toHaveLength(7);
+    expect(parsed.merchant.topProducts.length).toBeGreaterThan(10);
+    expect(parsed.merchant.topProducts.length).toBeLessThan(300);
+    expect(value.merchant.topProducts.length).toBe(parsed.merchant.topProducts.length);
   });
 });
 
