@@ -40,3 +40,7 @@ coverage/
 # supabase local
 supabase/.branches
 supabase/.temp
+
+# static preview build
+preview/dist
+preview/snapshot.json
