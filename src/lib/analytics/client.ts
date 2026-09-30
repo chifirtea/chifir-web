@@ -39,6 +39,28 @@ export function getSessionId(): string {
   return isBrowser() ? readOrCreate(sessionStorage, SESSION_KEY) : "server";
 }
 
+const SESSION_STARTED_KEY = "chifir.sid.started";
+
+/**
+ * Emits `session_started` exactly once per browser session (tab). Every funnel in
+ * docs/ANALYTICS.md starts here; later page loads in the same tab only emit `app_loaded`.
+ */
+export function trackSessionStart(extra: { party?: boolean } = {}): void {
+  if (!isBrowser()) return;
+  try {
+    const sid = getSessionId();
+    if (sessionStorage.getItem(SESSION_STARTED_KEY) === sid) return;
+    sessionStorage.setItem(SESSION_STARTED_KEY, sid);
+  } catch {
+    // Private mode: fall through and count the start anyway.
+  }
+  track("session_started", {
+    path: window.location.pathname,
+    ...(document.referrer ? { referrer: document.referrer.slice(0, 200) } : {}),
+    ...(extra.party !== undefined ? { party: extra.party } : {}),
+  });
+}
+
 export function setAnalyticsUser(id: string | null): void {
   userId = id ?? undefined;
 }

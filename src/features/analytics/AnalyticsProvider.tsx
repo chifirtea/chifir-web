@@ -2,7 +2,7 @@
 
 import { useEffect, type ReactNode } from "react";
 import { useWorldStore } from "@/engine/store/worldStore";
-import { flush, track } from "@/lib/analytics/client";
+import { flush, track, trackSessionStart } from "@/lib/analytics/client";
 import { usePerfSampler } from "./usePerfSampler";
 
 const HEARTBEAT_S = 30;
@@ -21,6 +21,7 @@ export function AnalyticsProvider({ children }: { children: ReactNode }) {
 
     // Device context (tier, mobile, gpu) is attached by CityCanvas at detection time.
 
+    trackSessionStart({ party: new URLSearchParams(window.location.search).has("party") });
     track("app_loaded", { path: window.location.pathname });
     track("city_load_started", {});
 
