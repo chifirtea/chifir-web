@@ -84,10 +84,14 @@ export function Crowd() {
   const crowd = useMemo(() => {
     if (!layout || !index) return [];
     const count = EVENT_CROWD[quality.tier];
-    const out: Array<{ pose: Pose2; seed: number }> = [];
-    for (const { parcel } of gatheringEvents(index, Math.max(at, clockNow()))) {
-      eventCrowdSpots(layout, index, parcel, count).forEach((pose, i) => out.push({ pose, seed: 5000 + i * 3 }));
-    }
+    const out: Array<{ pose: Pose2; seed: number; key: string }> = [];
+    // Several events can gather at once (a promo on Food Street, the drop on the square), so the
+    // seed and the key both carry the parcel: looks differ per crowd and React keys stay unique.
+    gatheringEvents(index, Math.max(at, clockNow())).forEach(({ parcel }, pi) => {
+      eventCrowdSpots(layout, index, parcel, count).forEach((pose, i) =>
+        out.push({ pose, seed: 5000 + pi * 97 + i * 3, key: `${parcel.id}:${i}` }),
+      );
+    });
     return out;
   }, [layout, index, quality.tier, at]);
 
@@ -97,7 +101,7 @@ export function Crowd() {
         <IdleFigure key={`idle-${f.seed}`} pose={f.pose} seed={f.seed} phones={false} />
       ))}
       {crowd.map((f) => (
-        <IdleFigure key={`crowd-${f.seed}`} pose={f.pose} seed={f.seed} phones />
+        <IdleFigure key={`crowd-${f.key}`} pose={f.pose} seed={f.seed} phones />
       ))}
     </group>
   );
