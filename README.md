@@ -43,9 +43,21 @@ never available in production. Setup details: `docs/SETUP.md`.
 | `pnpm e2e`                               | Playwright smoke tests                                                               |
 | `pnpm size`                              | Gzipped first-load JS for `/city` against the 600 KB budget (run after `pnpm build`) |
 | `pnpm db:seed`                           | Seed a Supabase project from `src/data/seed`                                         |
+| `pnpm ai:eval`                           | Runs the four concierge scenarios against the live model (needs `ANTHROPIC_API_KEY`; see docs/AI-EVAL.md) |
 | `pnpm format`                            | Prettier                                                                             |
 
 CI (`.github/workflows/ci.yml`) runs all of the above on Node 22 / pnpm 10 with a placeholder env.
+
+## Documentation
+
+- `docs/ARCHITECTURE.md` + `docs/adr/` — the architecture of record (v0.2 additions in §15)
+- `docs/milestones/city-alive-v0.2.md` — the CITY ALIVE v0.2 plan and workstreams
+- `docs/PERFORMANCE.md` — mobile budget, the `?perf=1` HUD, the on-device measurement protocol
+- `docs/ANALYTICS.md` — event catalog and the funnel
+- `docs/MEDIA.md` — how real merchant imagery replaces the demo imagery (no code changes)
+- `docs/AI-EVAL.md` — live validation of the concierge scenarios
+- `docs/MERCHANT-GENERATOR.md` — the admin-only URL → store prototype and its review step
+- `docs/SETUP.md` — local, Supabase, Stripe, AI, rehearsal and deployment setup
 
 ## Architecture
 
