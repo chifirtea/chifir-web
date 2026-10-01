@@ -21,7 +21,8 @@ export function PerfProbe({ gpu }: { gpu?: string | undefined }) {
     setPerfGpu(gpu);
   }, [gpu]);
 
-  // Priority 1000: after every other frame callback, so the delta covers the whole frame.
+  // Priority -1: after the player (-20) and camera (-10) but still *before* the render. A positive
+  // priority would make R3F stop rendering automatically ("manual frameloop"), so never use one here.
   useFrame(({ clock }) => {
     const t = clock.elapsedTime * 1000;
     if (last.current > 0) {
@@ -40,6 +41,6 @@ export function PerfProbe({ gpu }: { gpu?: string | undefined }) {
         programs: info.programs?.length ?? 0,
       };
     }
-  }, 1000);
+  }, -1);
   return null;
 }
