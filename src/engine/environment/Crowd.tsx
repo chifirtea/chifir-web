@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useReducer, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
 import type * as THREE from "three";
-import type { Pose2 } from "@/types/domain";
+import type { CityEvent, Pose2 } from "@/types/domain";
 import { useCityStore } from "@/city/cityStore";
 import { eventCrowdSpots, getStreetLayout } from "@/city/layout";
 import { useQuality } from "@/engine/canvas/qualityStore";
@@ -21,6 +21,7 @@ import { Accessories, npcLook } from "./Npcs";
 
 const EVENT_CROWD: Record<"low" | "medium" | "high", number> = { low: 6, medium: 12, high: 20 };
 const MAX_SLEEP_MS = 60_000;
+const NO_EVENTS: readonly CityEvent[] = [];
 
 function IdleFigure({ pose, seed, phones }: { pose: Pose2; seed: number; phones: boolean }) {
   const group = useRef<THREE.Group>(null);
@@ -41,24 +42,28 @@ function IdleFigure({ pose, seed, phones }: { pose: Pose2; seed: number; phones:
   );
 }
 
-/** Re-renders at the next instant any event's gathering state flips (start − gatherFrom, end). */
-function useGatherTicker(events: ReturnType<typeof useCityStore.getState>["index"] extends infer I ? (I extends { snapshot: { events: infer E } } ? E : never) : never): number {
-  const [tick, bump] = useReducer((n: number) => n + 1, 0);
+/**
+ * The clock value to evaluate gathering against: refreshed at the next instant any event's
+ * gathering state flips (start − gatherFrom; start/end also rebuild the index).
+ */
+function useGatherClock(events: readonly CityEvent[]): number {
+  const [at, setAt] = useState(() => clockNow());
   useEffect(() => {
     const now = clockNow();
     const next = nextGatherChangeAt(events, now);
     if (next === null) return;
-    const timer = setTimeout(bump, Math.min(MAX_SLEEP_MS, Math.max(50, next - now + 20)));
+    const timer = setTimeout(() => setAt(clockNow()), Math.min(MAX_SLEEP_MS, Math.max(50, next - now + 20)));
     return () => clearTimeout(timer);
-  }, [events, tick]);
-  return tick;
+  }, [events, at]);
+  return at;
 }
 
 export function Crowd() {
   const quality = useQuality();
   const index = useCityStore((s) => s.index);
   const layout = useMemo(() => (index ? getStreetLayout(index) : null), [index]);
-  const tick = useGatherTicker(index?.snapshot.events ?? []);
+  const events = index?.snapshot.events ?? NO_EVENTS;
+  const at = useGatherClock(events);
 
   const idle = useMemo(() => {
     if (!layout) return [];
@@ -80,12 +85,11 @@ export function Crowd() {
     if (!layout || !index) return [];
     const count = EVENT_CROWD[quality.tier];
     const out: Array<{ pose: Pose2; seed: number }> = [];
-    for (const { parcel } of gatheringEvents(index, clockNow())) {
+    for (const { parcel } of gatheringEvents(index, Math.max(at, clockNow()))) {
       eventCrowdSpots(layout, index, parcel, count).forEach((pose, i) => out.push({ pose, seed: 5000 + i * 3 }));
     }
     return out;
-    // `tick` re-evaluates the gathering window at its boundaries; the index covers start/end.
-  }, [layout, index, quality.tier, tick]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [layout, index, quality.tier, at]);
 
   return (
     <group>

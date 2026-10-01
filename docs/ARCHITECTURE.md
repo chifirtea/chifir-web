@@ -202,8 +202,14 @@ every interior has unique world coordinates and the street is unmounted while in
 - Route: `POST /api/ai/concierge` (server only) → SSE stream of `ChatStreamEvent`.
 - Provider: `LLMProvider.stream({ system, messages, tools, maxTokens })` → `AnthropicProvider` using `client.messages.stream()` in a manual tool loop (streaming text, `strict: true` tools, `eager_input_streaming: true` with Zod validation before execution, stop on `refusal`/`max_tokens`, typed SDK errors). Model from `AI_MODEL` (default `claude-opus-5-5`), `output_config.effort: 'low'` for chat latency.
 - Tools are the only source of facts. They call the same `DataSource` the UI uses:
-  `search_merchants`, `search_products`, `get_merchant`, `get_events`, `navigate`, `propose_cart`.
-  The system prompt forbids stating any price, item or availability that a tool did not return in this turn.
+  `search_merchants` (with `sort: "popular"` = rating × ln(ratingCount+1), sponsored tiebreak),
+  `search_products`, `get_merchant`, `get_events`, `recommend`, `highlight_storefront`,
+  `open_merchant`, `open_product`, `navigate`, `propose_cart`. Product facts carry
+  `inventoryStatus`, `availableFrom/Until` and `purchasableNow`, so a drop that has not started
+  is described as "drops at 8 PM", never as available. The cacheable system prompt includes a
+  compact city map (districts → merchants, tonight's events in city time) so "take me to Event
+  Square" needs no tool call. The prompt forbids stating any price, item or availability that a
+  tool did not return in this turn.
 - Client protocol: the client sends plain text history + context (`location`, cart summary, local time, stated preferences). The server re-runs tools each turn (stateless). Events: `text`, `cards` (merchant/product cards to render), `action` (see §10), `done`, `error`.
 - Guardrails: Zod on request body (≤16 messages, ≤2000 chars each, ≤12k total, last message from the user), per-session token bucket (in-process for MVP; move to Upstash/Postgres before scale), tool loop capped at 4 iterations and ~700 output tokens, tool inputs validated with tight caps (query ≤120 chars, ≤12 results), merchant text wrapped as data in prompts, cart lines priced server-side (the client sends ids only), conversation history persisted only for signed-in users and only to their own conversations.
 
@@ -225,8 +231,11 @@ teleportTo(pose)   // fade out → set player rig → fade in → analytics 'tel
 guideTo(target)    // sets a waypoint: beacon in-world + HUD chevron + distance
 ```
 
-The AI never moves the player directly; it emits `{ type: 'navigate', mode, target }` and the
-client executes it through the same bus, with a one-tap confirmation for teleports.
+The AI never moves the player directly; it emits actions (`navigate`, `highlight_storefront`,
+`open_merchant`, `open_product`, `recommend`, `propose_cart`, `escalate`) that carry ids only.
+The client validates every id against the city index (`validateAIAction`), drops anything
+unknown (`ai_action_executed { accepted: false }`), executes the rest through the same bus, and
+keeps a one-tap confirmation for teleports.
 
 ## 11. Asset management strategy
 

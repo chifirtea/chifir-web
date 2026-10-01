@@ -21,10 +21,12 @@ const CLOCK_TICK_MS = 30_000;
 /**
  * A merchant's overview sheet: brand header, open-now status, delivery line, featured products,
  * its events, and the ways to get there. Opened by the AI's `open_merchant` action or a card's
- * "Details". The last merchant stays mounted while the drawer slides out.
+ * "Details". The last merchant stays mounted while the drawer slides out, and the sheet yields
+ * to the product sign (which mounts under it) while a product is focused.
  */
 export function MerchantPanel() {
   const merchantId = useWorldStore((s) => s.merchantPanelId);
+  const yielded = useWorldStore((s) => s.focusedProductId !== null);
   const setMerchantPanel = useWorldStore((s) => s.setMerchantPanel);
   const index = useCityStore((s) => s.index);
   const isPhone = useIsPhone();
@@ -37,7 +39,7 @@ export function MerchantPanel() {
 
   return (
     <Drawer
-      open={merchantId !== null}
+      open={merchantId !== null && !yielded}
       onClose={close}
       side={isPhone ? "bottom" : "right"}
       width="min(460px, 100vw)"

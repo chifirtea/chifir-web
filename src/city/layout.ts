@@ -637,8 +637,9 @@ export function buildStreetLayout(index: CityIndex): StreetLayout {
 
   // Small groups on the plaza, between the streets, where nothing else stands.
   const groupRand = mulberry32(0xc0ffee);
-  ring(8, plaza.radius - 10, Math.PI / 8 + 0.35, (p) => {
-    if (idleGroups.filter((g) => g.districtId === plazaDistrictId).length >= 3) return;
+  ring(8, plaza.radius - 5, Math.PI / 8, (p, angle) => {
+    // Every other spot so the groups spread around the plaza instead of bunching on one side.
+    if (Math.round((angle - Math.PI / 8) / (Math.PI / 4)) % 2 !== 0) return;
     if (blocked(p) || !clearOfFurniture(p, 2.4)) return;
     if (roadSpecs.some((r) => inRoadCorridor(r, p, STREET_WIDTH / 2 + 2, 6))) return;
     idleGroups.push({ ...p, size: 2 + Math.floor(groupRand() * 2), districtId: plazaDistrictId });

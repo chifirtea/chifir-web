@@ -50,6 +50,8 @@ export interface WorldState {
   merchantPanelId: string | null;
   /** Parcel whose door is lit up in-world (AI `highlight_storefront`, party pings). */
   highlightedParcelId: string | null;
+  /** Event whose sheet is open (Event HUD, Places "Details", AI). */
+  eventPanelId: string | null;
   conciergeOpen: boolean;
   cartOpen: boolean;
   placesOpen: boolean;
@@ -74,6 +76,7 @@ export interface WorldState {
   setFocusedProduct: (productId: string | null) => void;
   setTalkingTo: (merchantId: string | null) => void;
   setMerchantPanel: (merchantId: string | null) => void;
+  setEventPanel: (eventId: string | null) => void;
   setHighlightedParcel: (parcelId: string | null) => void;
   setConciergeOpen: (open: boolean, seed?: string | null) => void;
   setCartOpen: (open: boolean) => void;
@@ -93,6 +96,7 @@ export const useWorldStore = create<WorldState>((set, get) => ({
   talkingToMerchantId: null,
   merchantPanelId: null,
   highlightedParcelId: null,
+  eventPanelId: null,
   conciergeOpen: false,
   cartOpen: false,
   placesOpen: false,
@@ -128,6 +132,7 @@ export const useWorldStore = create<WorldState>((set, get) => ({
   setFocusedProduct: (focusedProductId) => set({ focusedProductId }),
   setTalkingTo: (talkingToMerchantId) => set({ talkingToMerchantId }),
   setMerchantPanel: (merchantPanelId) => set({ merchantPanelId }),
+  setEventPanel: (eventPanelId) => set({ eventPanelId }),
   setHighlightedParcel: (highlightedParcelId) => {
     if (get().highlightedParcelId === highlightedParcelId) return;
     set({ highlightedParcelId });
@@ -141,6 +146,7 @@ export const useWorldStore = create<WorldState>((set, get) => ({
       focusedProductId: null,
       talkingToMerchantId: null,
       merchantPanelId: null,
+      eventPanelId: null,
       conciergeOpen: false,
       cartOpen: false,
       placesOpen: false,
@@ -153,6 +159,7 @@ export const selectInputLocked = (s: WorldState): boolean =>
   s.focusedProductId !== null ||
   s.talkingToMerchantId !== null ||
   s.merchantPanelId !== null ||
+  s.eventPanelId !== null ||
   s.conciergeOpen ||
   s.cartOpen ||
   s.placesOpen;

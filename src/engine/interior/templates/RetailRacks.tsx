@@ -3,14 +3,16 @@
 import { useMemo } from "react";
 import * as THREE from "three";
 import { StaticInstances, type InstanceTransform } from "@/engine/environment/StaticInstances";
+import { hashString, mulberry32 } from "@/engine/environment/prng";
 import { makeLabelTexture, mixHex } from "@/engine/storefront/signage";
 import { GEO, MAT, tinted, useMaxTextureSize, useTextureMaterial } from "@/engine/storefront/templates/parts";
 import type { InteriorTemplateDef, InteriorTemplateProps } from "../types";
-import { BackWallSign, Counter, EmployeeFigure, ProductDisplay, Room, orderProducts, roomColliders, type Slot } from "./parts";
+import { BackWallSign, Counter, EmployeeFigure, HeroWall, Plants, ProductDisplay, Room, orderProducts, roomColliders, type Slot } from "./parts";
 
 /**
  * Retail racks: three clothing rails with hanging product cards, two "new in" plinths by the
- * entrance, a mirror, a curtained fitting room and a cash desk at the back.
+ * entrance, a mirror, a curtained fitting room, a wall of folded goods in the brand's colours and
+ * a cash desk at the back under the hero print.
  */
 
 const ROOM = { width: 14, depth: 12, height: 3.6 };
@@ -67,22 +69,43 @@ function RetailRacksComponent({ merchant, products, employee, quality }: Interio
       ),
     [],
   );
+  // Folded goods on the right wall shelves: stacks in the brand's tones.
+  const stacks = useMemo(() => {
+    const rand = mulberry32(hashString(merchant.id));
+    const shelves: InstanceTransform[] = [];
+    const goods: InstanceTransform[] = [];
+    const palette = [brand.primary, brand.secondary, mixHex(brand.secondary, "#ffffff", 0.4), "#2a2a2e", "#e9e6df", mixHex(brand.accent, "#ffffff", 0.3)];
+    const x = ROOM.width / 2 - 0.25;
+    for (let level = 0; level < 3; level++) {
+      const y = 0.8 + level * 0.6;
+      shelves.push({ x, y, z: -1.2, sx: 0.45, sy: 0.04, sz: 5.2 });
+      for (let i = 0; i < 7; i++) {
+        if (rand() < 0.15) continue;
+        const h = 0.18 + rand() * 0.16;
+        goods.push({ x, y: y + h / 2 + 0.02, z: -3.6 + i * 0.72 + (rand() - 0.5) * 0.08, sx: 0.36, sy: h, sz: 0.44, color: palette[Math.floor(rand() * palette.length)] });
+      }
+    }
+    return { shelves, goods };
+  }, [merchant.id, brand]);
   const fittingLabel = useMemo(
     () => makeLabelTexture("Fitting room", { bg: brand.primary, fg: brand.onPrimary, accent: brand.accent, width: 512, height: 128, maxTextureSize: maxTex }),
     [brand, maxTex],
   );
   const fittingMat = useTextureMaterial(fittingLabel, 0.5, { roughness: 0.8 });
   const mirror = useMemo(() => new THREE.MeshStandardMaterial({ color: "#c7d2dc", metalness: 1, roughness: 0.05, emissive: "#0e1218", emissiveIntensity: 0.6 }), []);
+  const goodsMat = useMemo(() => new THREE.MeshStandardMaterial({ color: "#ffffff", roughness: 0.95 }), []);
   const wall = mixHex(brand.primary, "#ece6dd", 0.82);
 
   return (
     <group>
-      <Room room={ROOM} brand={brand} quality={quality} floor="concrete" floorTint="#8f8a84" wallColor={wall} panels={{ rows: 2, cols: 3 }} />
+      <Room room={ROOM} brand={brand} quality={quality} floor="terrazzo" floorTint="#cfc8bd" wallColor={wall} panels={{ rows: 2, cols: 3 }} />
       <StaticInstances geometry={GEO.cylinder} material={MAT.darkMetal} items={uprights} />
       <StaticInstances geometry={GEO.cylinder} material={MAT.darkMetal} items={rails} />
       <StaticInstances geometry={GEO.box} material={MAT.darkMetal} items={feet} />
+      <StaticInstances geometry={GEO.box} material={tinted("#3a2d24", { roughness: 0.7 })} items={stacks.shelves} />
+      <StaticInstances geometry={GEO.box} material={goodsMat} items={stacks.goods} />
       {/* Mirror on the right wall. */}
-      <group position={[ROOM.width / 2 - 0.08, 1.4, 2.6]} rotation={[0, -Math.PI / 2, 0]}>
+      <group position={[ROOM.width / 2 - 0.08, 1.4, 3.2]} rotation={[0, -Math.PI / 2, 0]}>
         <mesh geometry={GEO.box} material={tinted(brand.secondary, { roughness: 0.6 })} position={[0, 0, -0.03]} scale={[1.0, 2.2, 0.05]} />
         <mesh geometry={GEO.plane} material={mirror} scale={[0.9, 2.1, 1]} />
       </group>
@@ -93,11 +116,14 @@ function RetailRacksComponent({ merchant, products, employee, quality }: Interio
         <mesh geometry={GEO.cylinder} material={MAT.darkMetal} position={[0, 2.45, 0.85]} rotation={[0, 0, Math.PI / 2]} scale={[0.02, 2.0, 0.02]} />
         <mesh geometry={GEO.box} material={tinted(brand.secondary, { roughness: 0.95, side: THREE.DoubleSide })} position={[-0.25, 1.22, 0.86]} scale={[1.4, 2.4, 0.06]} />
         <mesh geometry={GEO.plane} material={fittingMat} position={[0, 2.75, 0.9]} scale={[1.0, 0.25, 1]} />
+        <mesh geometry={GEO.sphere} material={MAT.sconce} position={[0.5, 2.3, 0.4]} scale={[0.08, 0.08, 0.08]} />
       </group>
-      <Counter position={[DESK.x, DESK.z]} width={2.4} depth={0.8} color={brand.primary} topColor={mixHex(brand.secondary, "#ffffff", 0.1)} />
-      <BackWallSign merchant={merchant} position={[2.6, 2.75, -ROOM.depth / 2 + 0.1]} width={4.4} />
+      <Counter position={[DESK.x, DESK.z]} width={2.4} depth={0.8} color={brand.primary} topColor={mixHex(brand.secondary, "#ffffff", 0.1)} accent={brand.accent} till />
+      <HeroWall merchant={merchant} position={[0.2, 2.45, -ROOM.depth / 2 + 0.1]} width={3.6} height={1.5} />
+      <BackWallSign merchant={merchant} position={[4.0, 2.75, -ROOM.depth / 2 + 0.1]} width={3.2} />
+      <Plants positions={[[ROOM.width / 2 - 0.8, ROOM.depth / 2 - 0.9], [-ROOM.width / 2 + 0.8, 2.6]]} />
       {shown.map((product, i) => (
-        <ProductDisplay key={product.id} product={product} brand={brand} slot={SLOTS[i]!} variant={i < 9 ? "hanger" : "plinth"} />
+        <ProductDisplay key={product.id} product={product} brand={brand} slot={SLOTS[i]!} variant={i < 9 ? "hanger" : "plinth"} quality={quality} ceiling={ROOM.height} />
       ))}
       {employee && <EmployeeFigure employee={employee} brand={brand} pose={retailRacksTemplate.employee} />}
     </group>
@@ -120,6 +146,9 @@ export const retailRacksTemplate: InteriorTemplateDef = {
       { id: "plinth:1", x: 1.8, z: 1.8, w: 0.7, d: 0.7 },
       { id: "desk", x: DESK.x, z: DESK.z, w: 2.6, d: 1.0 },
       { id: "fitting-room", x: FITTING.x, z: FITTING.z, w: 2.2, d: 1.9 },
+      { id: "wall-shelves", x: ROOM.width / 2 - 0.25, z: -1.2, w: 0.6, d: 5.4 },
+      { id: "plant:0", x: ROOM.width / 2 - 0.8, z: ROOM.depth / 2 - 0.9, w: 0.6, d: 0.6 },
+      { id: "plant:1", x: -ROOM.width / 2 + 0.8, z: 2.6, w: 0.6, d: 0.6 },
     ]),
   Component: RetailRacksComponent,
 };
