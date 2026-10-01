@@ -266,7 +266,39 @@ Catalog in `src/lib/analytics/events.ts` (typed payloads). Session id per tab, a
 | Auth | Supabase Auth via `@supabase/ssr` cookies; `proxy.ts` refreshes sessions; orders/profile RLS by `auth.uid()`. |
 | Headers | `nosniff`, `DENY` framing, strict referrer, restrictive permissions policy. |
 
-## 15. Milestone plan (vertical slice)
+## 15. CITY ALIVE v0.2 additions
+
+Everything below reuses the contracts above; nothing merchant-specific entered the engine.
+
+- **One clock (ADR-005).** `lib/time/clock.ts` is "now" on the client; `?clock=` shifts it for a
+  rehearsal (allowed outside production or with `ALLOW_CLOCK_OVERRIDE=1`) and the offset travels
+  to the API as a header. `lib/events/status.ts` derives event phases, pop-up tenancy and product
+  availability from it; `CityIndex` is built per clock value and rebuilt at the next boundary.
+- **Pop-ups are parcels.** A time-boxed tenancy (`occupied_from/until`) plus optional
+  `storefront_template`/`interior_template` overrides on the parcel. Interiors and doors are
+  keyed by parcel, so a brand's store and its pop-up are different rooms; the pop-up shows the
+  event's `product_ids` collection (`productsAtParcel`).
+- **Drops are events + availability windows.** `events.product_ids`, `capacity` (context only),
+  `hero_video_url`, `livestream_url`, `reward_id`; `products.available_from/until` enforced by
+  `variantProblem`/`computeTotals` on the client preview and at checkout with the request clock.
+  No fake scarcity: counts are informational, the collection stays on sale after the window.
+- **Entitlements.** `digital_rewards.kind` now covers avatar items, furniture, food props,
+  vehicles, badges, emotes and access passes, with `avatar_slot` and a data-driven `appearance`.
+  The order API returns the rewards an order earned; the client entitlement store grants them to
+  the buyer (guest or signed in), `equip()` mirrors the outfit into the engine's avatar store and
+  the avatar renders the silhouette + colours + print. Signed-in users merge server grants.
+- **Presence (ADR-006).** `PresenceTransport` with Supabase Realtime and a `BroadcastChannel`
+  fallback; rooms are locations; packets are cosmetic and validated; party links are `?party=`.
+- **AI actions.** `highlight_storefront`, `open_merchant`, `open_product`, `recommend` join
+  `navigate`/`propose_cart`; every id is validated against the city index before execution;
+  tools expose availability so the model can say "drops at 8 PM" instead of inventing stock.
+- **Merchant generator (ADR-007).** Extraction → AI structuring validated against the schema →
+  mandatory human review → `publishMerchantDraft`, which refuses anything not approved.
+- **Measurement.** `lib/perf` marks the load path (User Timing), keeps frame-time percentiles and
+  device info; `?perf=1` shows the HUD in any build; `perf_sample` carries the same numbers.
+  Panels and drawers are lazy. See docs/PERFORMANCE.md, docs/ANALYTICS.md, docs/MEDIA.md.
+
+## 16. Milestone plan (vertical slice)
 
 | Milestone | Scope | Exit criteria |
 |---|---|---|

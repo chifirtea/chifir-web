@@ -9,6 +9,7 @@ import { useCityStore } from "@/city/cityStore";
 import { useWorldStore } from "@/engine/store/worldStore";
 import { track } from "@/lib/analytics/client";
 import { eventPhase as livePhase } from "@/lib/events/status";
+import { useEventPanelStore } from "@/features/events/eventPanelStore";
 import { cn } from "@/lib/utils/cn";
 import type { CityEvent, District, Merchant, NavTarget, Parcel } from "@/types/domain";
 import { fulfillmentEtaLabel, openNowStatus, priceLevelLabel } from "./openNow";
@@ -348,13 +349,25 @@ function EventRow({
       {expanded ? (
         <div className="mt-2">
           <p className="text-[13px] leading-relaxed text-fog-2">{event.description}</p>
-          <button
-            type="button"
-            onClick={() => onGo({ kind: "event", eventId: event.id })}
-            className="font-display mt-3 h-10 rounded-lg bg-white/8 px-3 text-[13px] font-semibold tracking-tight hover:bg-white/14"
-          >
-            Take me there
-          </button>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => onGo({ kind: "event", eventId: event.id })}
+              className="font-display h-10 rounded-lg bg-white/8 px-3 text-[13px] font-semibold tracking-tight hover:bg-white/14"
+            >
+              Take me there
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                useWorldStore.getState().setPlacesOpen(false);
+                useEventPanelStore.getState().open(event.id);
+              }}
+              className="font-display h-10 rounded-lg border border-line px-3 text-[13px] font-semibold tracking-tight text-fog-2 hover:bg-white/5 hover:text-fog"
+            >
+              Details
+            </button>
+          </div>
         </div>
       ) : null}
     </li>

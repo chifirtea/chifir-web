@@ -9,13 +9,10 @@ import { PartyHud } from "@/features/party/PartyHud";
 import { useInputStore } from "@/engine/input/inputStore";
 import { useWorldStore } from "@/engine/store/worldStore";
 import { ControlsHint } from "./ControlsHint";
-import { DevStats } from "./DevStats";
 import { InteractionPrompt } from "./InteractionPrompt";
 import { LocationBadge } from "./LocationBadge";
 import { useIsTouch } from "./useMediaQuery";
 import { WaypointChevron } from "./WaypointChevron";
-
-const IS_DEV = process.env.NODE_ENV !== "production";
 
 /**
  * The DOM layer over the canvas: signage, not a dashboard. The container ignores pointer events;
@@ -65,15 +62,6 @@ export function Hud() {
         <InteractionPrompt />
       </div>
       {ready ? <span data-testid="city-ready" className="sr-only">City ready</span> : null}
-
-      {IS_DEV ? (
-        <div
-          className="absolute right-3 bottom-3"
-          style={{ marginBottom: "env(safe-area-inset-bottom)" }}
-        >
-          <DevStats />
-        </div>
-      ) : null}
     </div>
   );
 }

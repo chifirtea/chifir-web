@@ -18,6 +18,8 @@ import { formatCents } from "@/lib/utils/money";
 import { useUser } from "@/features/auth/useUser";
 import { authPath } from "@/features/auth/nextPath";
 import { useCartStore } from "@/features/cart/cartStore";
+import { RewardSwatch } from "@/features/events/EventPanel";
+import { selectIsEquipped, useEntitlementStore } from "@/features/entitlements/entitlementStore";
 import type { ClaimResponse, OrderResponse, PublicOrder } from "@/lib/commerce/types";
 
 export interface OrderStatusProps {
@@ -26,6 +28,7 @@ export interface OrderStatusProps {
   token?: string | undefined;
   /** Stripe `session_id` from the success URL: triggers one webhook-less sync. */
   sessionId?: string | undefined;
+  /** Rewards this order earns (product twins + event reward), as known at render time. */
   rewards: Record<string, DigitalReward>;
   offerTitles: Record<string, string>;
   /** Server-known user id, so the first paint agrees with the session cookie. */
@@ -162,11 +165,12 @@ export function OrderStatus({
   initialOrder,
   token,
   sessionId,
-  rewards,
+  rewards: initialRewards,
   offerTitles,
   initialUserId,
 }: OrderStatusProps) {
   const [order, setOrder] = useState<PublicOrder>(initialOrder);
+  const [rewards, setRewards] = useState<Record<string, DigitalReward>>(initialRewards);
 
   // Once this order is paid, the cart it came from is done. Clear it exactly once per order so
   // items added later (e.g. "Order again") survive a revisit of this page.
@@ -205,6 +209,7 @@ export function OrderStatus({
       if (!res.ok) throw new Error(String(res.status));
       const data = (await res.json()) as OrderResponse;
       setOrder(data.order);
+      if (data.rewards?.length) setRewards((r) => ({ ...r, ...Object.fromEntries(data.rewards.map((x) => [x.id, x])) }));
       setFetchError(null);
     } catch {
       setFetchError("Live updates paused. We will keep trying.");
@@ -225,6 +230,7 @@ export function OrderStatus({
         if (!res.ok) return;
         const data = (await res.json()) as OrderResponse;
         setOrder(data.order);
+        if (data.rewards?.length) setRewards((r) => ({ ...r, ...Object.fromEntries(data.rewards.map((x) => [x.id, x])) }));
       })
       .catch(() => {
         // The poll below picks it up.
@@ -277,6 +283,16 @@ export function OrderStatus({
       .catch(() => setClaim("failed"));
   }, [base, claimable, token, userId]);
   const claiming = claimable && claim === "idle";
+
+  // The moment the order is paid, its twins are the buyer's: grant them locally (guest or not) so
+  // the avatar can wear them right away; the account claim keeps them across devices.
+  const paid = PAID.has(order.status);
+  const grantFromOrder = useEntitlementStore((s) => s.grantFromOrder);
+  const earned = useMemo(() => Object.values(rewards), [rewards]);
+  useEffect(() => {
+    if (!paid || earned.length === 0) return;
+    grantFromOrder(order.id, earned);
+  }, [paid, earned, order.id, grantFromOrder]);
 
   const groups = useMemo(() => groupByMerchant(order), [order]);
   const rewardItems = order.items.filter((i) => i.digitalRewardId);
@@ -331,34 +347,43 @@ export function OrderStatus({
         <MerchantCard key={g.key} group={g} currency={order.currency} />
       ))}
 
-      {rewardItems.length ? (
-        <section className="sign p-5" aria-labelledby="rewards-title">
+      {rewardItems.length || earned.length ? (
+        <section className="sign p-5" aria-labelledby="rewards-title" data-testid="order-rewards">
           <h2
             id="rewards-title"
             className="font-display flex items-center gap-2 text-lg font-semibold tracking-tight"
           >
-            <Sparkles className="h-5 w-5 text-sky" aria-hidden="true" /> Digital twins
+            <Sparkles className="h-5 w-5 text-sky" aria-hidden="true" />
+            {paid ? "Digital twin unlocked" : "Digital twins"}
           </h2>
-          <ul className="mt-3 space-y-2">
-            {rewardItems.map((item) => {
-              const reward = item.digitalRewardId ? rewards[item.digitalRewardId] : undefined;
-              return (
-                <li key={item.id} className="flex items-start justify-between gap-3 text-sm">
-                  <span>
-                    <span className="text-fog-2">{item.titleSnapshot} comes with:</span>{" "}
-                    <span className="font-medium">{reward?.name ?? "a digital twin"}</span>
-                  </span>
-                  {reward ? <Badge tone="sodium">{reward.rarity}</Badge> : null}
-                </li>
-              );
-            })}
-          </ul>
+          {paid ? (
+            <ul className="mt-3 space-y-2">
+              {earned.map((reward) => (
+                <RewardCard key={reward.id} reward={reward} />
+              ))}
+            </ul>
+          ) : (
+            <ul className="mt-3 space-y-2">
+              {rewardItems.map((item) => {
+                const reward = item.digitalRewardId ? rewards[item.digitalRewardId] : undefined;
+                return (
+                  <li key={item.id} className="flex items-start justify-between gap-3 text-sm">
+                    <span>
+                      <span className="text-fog-2">{item.titleSnapshot} comes with:</span>{" "}
+                      <span className="font-medium">{reward?.name ?? "a digital twin"}</span>
+                    </span>
+                    {reward ? <Badge tone="sodium">{reward.rarity}</Badge> : null}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
           <div className="mt-4 text-sm">
-            {!PAID.has(order.status) ? (
+            {!paid ? (
               <p className="text-fog-3">Twins unlock once the order is paid.</p>
             ) : owned || claim === "claimed" ? (
               <p className="flex items-center gap-1.5 text-mint">
-                <Check className="h-4 w-4" aria-hidden="true" /> Added to your account
+                <Check className="h-4 w-4" aria-hidden="true" /> Saved to your account
               </p>
             ) : claiming ? (
               <p className="text-fog-2">Adding to your account…</p>
@@ -366,15 +391,19 @@ export function OrderStatus({
               <p className="text-fog-2">
                 {claim === "failed"
                   ? "We could not attach this order to your account. Refresh to try again."
-                  : "Sign in with the account that placed this order to see its twins."}
+                  : "Sign in with the account that placed this order to keep its twins everywhere."}
               </p>
             ) : (
-              <Link
-                href={authPath("login", `/orders/${order.id}${tokenQuery}`)}
-                className="inline-flex min-h-11 items-center rounded-xl border border-sky/40 bg-sky/10 px-4 font-medium text-sky hover:bg-sky/16"
-              >
-                Sign in to claim your digital twins
-              </Link>
+              <p className="text-fog-2">
+                Yours on this device now.{" "}
+                <Link
+                  href={authPath("login", `/orders/${order.id}${tokenQuery}`)}
+                  className="font-medium text-sky underline-offset-2 hover:underline"
+                >
+                  Sign in
+                </Link>{" "}
+                to keep them on every device.
+              </p>
             )}
           </div>
         </section>
@@ -642,5 +671,36 @@ function Row({
       <dt className={cn("min-w-0 truncate", !strong && !tone && "text-fog-2")}>{label}</dt>
       <dd className="tabular shrink-0">{value}</dd>
     </div>
+  );
+}
+
+/** One earned reward with its look and, for wearables, a wear/unwear toggle. */
+function RewardCard({ reward }: { reward: DigitalReward }) {
+  const equipped = useEntitlementStore(selectIsEquipped(reward.id));
+  const equip = useEntitlementStore((s) => s.equip);
+  const unequip = useEntitlementStore((s) => s.unequip);
+  const wearable = Boolean(reward.avatarSlot);
+  return (
+    <li className="flex items-center gap-3 rounded-xl border border-line bg-white/[0.03] px-3 py-2.5 text-sm" data-testid="reward-card">
+      <RewardSwatch reward={reward} className="mt-0 h-9 w-9 rounded-lg" />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate font-medium">{reward.name}</span>
+        <span className="block truncate text-xs text-fog-2">{reward.description}</span>
+      </span>
+      <Badge tone="sodium">{reward.rarity}</Badge>
+      {wearable ? (
+        <Button
+          size="sm"
+          variant={equipped ? "secondary" : "primary"}
+          data-testid="reward-wear"
+          aria-pressed={equipped}
+          onClick={() => (equipped && reward.avatarSlot ? unequip(reward.avatarSlot) : equip(reward.id))}
+        >
+          {equipped ? "Wearing" : "Wear it"}
+        </Button>
+      ) : (
+        <Badge tone="mint">Pinned</Badge>
+      )}
+    </li>
   );
 }

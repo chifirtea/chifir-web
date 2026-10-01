@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import type { DigitalReward } from "@/types/domain";
 import { getDataSource } from "@/lib/data";
 import { getCurrentUser } from "@/lib/auth/session";
-import { authorizeOrderAccess, publicOrder, refreshOrderStatus } from "@/lib/commerce/service";
+import { authorizeOrderAccess, orderRewardIds, publicOrder, refreshOrderStatus } from "@/lib/commerce/service";
 import { orderIdSchema, orderTokenSchema } from "@/lib/commerce/validation";
 import { OrderStatus } from "@/features/orders/OrderStatus";
 
@@ -32,9 +32,8 @@ export default async function OrderPage({
   if (!authorizeOrderAccess(order, { userId: user?.id, token })) notFound();
 
   const fresh = await refreshOrderStatus(order, new Date(), ds);
-  const rewardIds = [
-    ...new Set(fresh.items.map((i) => i.digitalRewardId).filter((r): r is string => Boolean(r))),
-  ];
+  // Product twins plus any event reward the order earned (both shown; granted once paid).
+  const rewardIds = await orderRewardIds(fresh, ds);
   const [rewards, offers] = await Promise.all([
     rewardIds.length ? ds.getRewards(rewardIds) : Promise.resolve([] as DigitalReward[]),
     ds.listOffers(),

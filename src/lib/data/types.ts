@@ -62,8 +62,15 @@ export interface MerchantSearchParams {
   /** Only merchants whose priceLevel is <= this value. */
   maxPriceLevel?: number;
   tags?: string[];
+  /**
+   * "relevance" (default): text score, then rating. "popular": rating × log(ratingCount) with
+   * sponsored as the tiebreak, so a 4.6 with a thousand reviews beats a 4.9 with twelve.
+   */
+  sort?: MerchantSort;
   limit?: number;
 }
+
+export type MerchantSort = "relevance" | "popular";
 
 export interface EventListParams {
   from?: string;
@@ -119,14 +126,19 @@ export interface CatalogSource {
   getMerchant(id: Id): Promise<Merchant | null>;
   getMerchantBySlug(slug: string): Promise<Merchant | null>;
   searchMerchants(params: MerchantSearchParams): Promise<Merchant[]>;
-  listProducts(merchantId: Id): Promise<Product[]>;
-  getProduct(id: Id): Promise<Product | null>;
-  getProducts(ids: Id[]): Promise<Product[]>;
+  /**
+   * Catalog reads that price or gate a purchase take the caller's clock (`SnapshotOptions.now`),
+   * so a rehearsal with the demo clock sees the same drop window on the client and the server.
+   * Production data is absolute; the Supabase implementation ignores the option.
+   */
+  listProducts(merchantId: Id, options?: SnapshotOptions): Promise<Product[]>;
+  getProduct(id: Id, options?: SnapshotOptions): Promise<Product | null>;
+  getProducts(ids: Id[], options?: SnapshotOptions): Promise<Product[]>;
   searchProducts(params: ProductSearchParams): Promise<Product[]>;
   getEmployee(merchantId: Id): Promise<AiEmployee | null>;
   listEvents(params?: EventListParams): Promise<CityEvent[]>;
-  getEvent(id: Id): Promise<CityEvent | null>;
-  listOffers(merchantId?: Id): Promise<Offer[]>;
+  getEvent(id: Id, options?: SnapshotOptions): Promise<CityEvent | null>;
+  listOffers(merchantId?: Id, options?: SnapshotOptions): Promise<Offer[]>;
   getRewards(ids: Id[]): Promise<DigitalReward[]>;
 }
 

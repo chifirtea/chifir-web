@@ -5,6 +5,7 @@ import "@/engine/storefront/templates";
 import "@/engine/interior/templates";
 
 import { useCallback, useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { CityScene } from "@/city/CityScene";
 import { InteriorScene } from "@/city/InteriorScene";
 import { useCityStore } from "@/city/cityStore";
@@ -24,20 +25,46 @@ import { PresenceLayer } from "@/engine/presence/PresenceLayer";
 import { setRigPose } from "@/engine/player/playerRig";
 import { useWorldStore, type PlayerPose } from "@/engine/store/worldStore";
 import { Fade } from "@/engine/transitions/Fade";
-import { ConciergeDrawer } from "@/features/ai/ConciergeDrawer";
-import { EmployeePanel } from "@/features/ai/EmployeePanel";
 import { AnalyticsProvider } from "@/features/analytics/AnalyticsProvider";
 import { ErrorBoundary } from "@/features/analytics/ErrorBoundary";
-import { CartDrawer } from "@/features/cart/CartDrawer";
-import { MerchantPanel } from "@/features/catalog/MerchantPanel";
-import { ProductPanel } from "@/features/catalog/ProductPanel";
+import { EntitlementSync } from "@/features/entitlements/EntitlementSync";
 import { DebugBridge } from "@/features/hud/DebugBridge";
 import { Hud } from "@/features/hud/Hud";
-import { PlacesPanel } from "@/features/hud/PlacesPanel";
 import { PerfHud } from "@/features/perf/PerfHud";
 import { Toast } from "@/features/hud/Toast";
 import { track } from "@/lib/analytics/client";
 import type { CitySnapshot } from "@/lib/data/types";
+
+// Panels and drawers are not needed for the first frame: they load on their first open. Each is
+// mounted closed, so the import happens as soon as the world is up, off the critical path.
+const ProductPanel = dynamic(() => import("@/features/catalog/ProductPanel").then((m) => m.ProductPanel), {
+  ssr: false,
+  loading: () => null,
+});
+const MerchantPanel = dynamic(() => import("@/features/catalog/MerchantPanel").then((m) => m.MerchantPanel), {
+  ssr: false,
+  loading: () => null,
+});
+const CartDrawer = dynamic(() => import("@/features/cart/CartDrawer").then((m) => m.CartDrawer), {
+  ssr: false,
+  loading: () => null,
+});
+const ConciergeDrawer = dynamic(() => import("@/features/ai/ConciergeDrawer").then((m) => m.ConciergeDrawer), {
+  ssr: false,
+  loading: () => null,
+});
+const EmployeePanel = dynamic(() => import("@/features/ai/EmployeePanel").then((m) => m.EmployeePanel), {
+  ssr: false,
+  loading: () => null,
+});
+const PlacesPanel = dynamic(() => import("@/features/hud/PlacesPanel").then((m) => m.PlacesPanel), {
+  ssr: false,
+  loading: () => null,
+});
+const EventPanel = dynamic(() => import("@/features/events/EventPanel").then((m) => m.EventPanel), {
+  ssr: false,
+  loading: () => null,
+});
 
 export interface CityAppProps {
   snapshot: CitySnapshot;
@@ -49,6 +76,8 @@ export interface CityAppProps {
   checkout?: string;
   /** Demo clock offset (ms) parsed from `?clock=` by the page, only when the server allows it. */
   clockOffsetMs?: number;
+  /** The raw `?clock=` value, so a reload keeps the running clock instead of re-anchoring. */
+  clockParam?: string;
 }
 
 /** Fallback if the loader never reports ready (e.g. a silent WebGL failure): reveal the HUD anyway. */
@@ -67,8 +96,9 @@ function initCity(
   snapshot: CitySnapshot,
   deepLinkTo: string | undefined,
   clockOffsetMs: number | undefined,
+  clockParam: string | undefined,
 ): void {
-  initClientClock(clockOffsetMs);
+  initClientClock(clockOffsetMs, clockParam);
   const city = useCityStore.getState();
   city.setSnapshot(snapshot);
   const index = useCityStore.getState().index;
@@ -111,9 +141,9 @@ function initCity(
   }
 }
 
-export function CityApp({ snapshot, deepLinkTo, ask, checkout, clockOffsetMs }: CityAppProps) {
+export function CityApp({ snapshot, deepLinkTo, ask, checkout, clockOffsetMs, clockParam }: CityAppProps) {
   useState(() => {
-    initCity(snapshot, deepLinkTo, clockOffsetMs);
+    initCity(snapshot, deepLinkTo, clockOffsetMs, clockParam);
     return true;
   });
   useCityPhaseTicker();
@@ -202,6 +232,8 @@ export function CityApp({ snapshot, deepLinkTo, ask, checkout, clockOffsetMs }: 
         <ConciergeDrawer />
         <EmployeePanel />
         <PlacesPanel />
+        <EventPanel />
+        <EntitlementSync />
         <PerfHud />
 
         <Fade />

@@ -14,7 +14,9 @@ import { Canvas, useFrame, type RootState } from "@react-three/fiber";
 import { PerformanceMonitor, Preload } from "@react-three/drei";
 import { ACESFilmicToneMapping, PCFSoftShadowMap, SRGBColorSpace } from "three";
 import { setAnalyticsDevice } from "@/lib/analytics/client";
+import { mark } from "@/lib/perf/marks";
 import { useWorldStore } from "@/engine/store/worldStore";
+import { PerfProbe } from "./PerfProbe";
 import { detectInitialQuality, type DetectedQuality } from "./detectQuality";
 import { higherTier, lowerTier, QUALITY_TIERS, type QualityTier } from "./quality";
 import { setQualityTier, useQuality, useQualityStore } from "./qualityStore";
@@ -46,11 +48,12 @@ function ReadySignal() {
   }, []);
 
   // useFrame runs before the render of its frame, so the second call is the first moment the
-  // first frame has actually been presented.
+  // first frame has actually been presented. Two frames later the city counts as interactive.
   useFrame(() => {
-    if (frames.current > 1) return;
+    if (frames.current > 3) return;
     frames.current += 1;
     if (frames.current === 2) useWorldStore.getState().setReady(true);
+    if (frames.current === 4) mark("city:interactive");
   });
 
   return null;
@@ -113,6 +116,7 @@ export function CityCanvas({ children }: { children: ReactNode }) {
         <Preload all />
       </Suspense>
       <ReadySignal />
+      <PerfProbe gpu={detected.gpu} />
     </Canvas>
   );
 }

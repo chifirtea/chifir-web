@@ -1,5 +1,6 @@
 "use client";
 
+import { clockHeaders } from "@/lib/time/clientClock";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { FlaskConical } from "lucide-react";
@@ -27,7 +28,7 @@ export function DemoPayment({ orderId, token, totalCents, currency }: DemoPaymen
     try {
       const res = await fetch("/api/checkout/demo", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", ...clockHeaders() },
         body: JSON.stringify({ orderId, token }),
       });
       const data = (await res.json().catch(() => null)) as

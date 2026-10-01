@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Check, Sparkles } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Check, Clock, Sparkles } from "lucide-react";
 import type { Product } from "@/types/domain";
 import { Badge, Button, Drawer, Price, ProductImage } from "@/components/ui";
 import { cn } from "@/lib/utils/cn";
@@ -22,6 +22,9 @@ import {
   variantProblem,
 } from "@/features/cart/pricing";
 import { DietaryChips, SpiceFlames, humanize, inventoryNote, leadTimeLabel } from "./attributes";
+import { eventPhase, formatLaunchTime, productAvailability } from "@/lib/events/status";
+import { useEventClock } from "@/features/events/useEventClock";
+import { formatCountdown } from "@/features/events/selectEvent";
 
 const ADDED_MS = 1200;
 
@@ -97,14 +100,29 @@ function ProductBody({ product, onViewCart }: { product: Product; onViewCart: ()
     return () => clearTimeout(t);
   }, [addedAt]);
 
+  // Drop items count down to their window on the city clock; everything else ticks harmlessly.
+  const now = useEventClock(Boolean(product.availableFrom || product.availableUntil || product.eventId));
+  const availability = productAvailability(product, now);
+  const upcoming = availability.state === "upcoming";
+  const event = product.eventId ? index?.eventsById[product.eventId] : undefined;
+  const dropPhase = event ? eventPhase(event, now) : null;
+
   const unit = unitPriceCents(product, selection);
   const offer = useMemo(
-    () => bestOfferFor(product, unit, merchantOffers ?? [], new Date(), promoCode || undefined),
-    [product, unit, merchantOffers, promoCode],
+    () => bestOfferFor(product, unit, merchantOffers ?? [], new Date(now), promoCode || undefined),
+    [product, unit, merchantOffers, promoCode, now],
   );
   const discount = offer ? unitDiscountCents(offer, unit) : 0;
-  const problem = variantProblem(product, selection);
+  const problem = variantProblem(product, selection, now);
   const soldOut = product.inventoryStatus === "out_of_stock";
+
+  // One `drop_product_viewed` per opening of a product that belongs to an event.
+  const tracked = useRef(false);
+  useEffect(() => {
+    if (!event || !dropPhase || tracked.current) return;
+    tracked.current = true;
+    track("drop_product_viewed", { eventId: event.id, productId: product.id, phase: dropPhase, source: "panel" });
+  }, [event, dropPhase, product.id]);
   const note = inventoryNote(product.inventoryStatus, product.inventoryCount);
   const types = availableFulfillmentTypes(merchant, [product]);
   const lead = leadTimeLabel(product);
@@ -148,6 +166,12 @@ function ProductBody({ product, onViewCart }: { product: Product; onViewCart: ()
             className="font-display text-2xl tracking-tight"
           />
           <span className="stamp">Get it IRL</span>
+          {upcoming && availability.state === "upcoming" ? (
+            <Badge tone="sodium" className="px-2 py-1 text-xs">
+              <Clock className="h-3 w-3" aria-hidden="true" />
+              Drops {formatLaunchTime(availability.availableFrom, now)}
+            </Badge>
+          ) : null}
           {offer ? (
             <Badge tone="signal">
               {offer.kind === "percent_off"
@@ -266,6 +290,23 @@ function ProductBody({ product, onViewCart }: { product: Product; onViewCart: ()
           ) : null}
         </div>
 
+        {event && dropPhase !== "ended" ? (
+          <div className="flex items-start gap-2.5 rounded-xl border border-signal/30 bg-signal/8 px-3 py-2.5 text-sm">
+            <Clock className="mt-0.5 h-4 w-4 shrink-0 text-signal" aria-hidden="true" />
+            <p>
+              <span className="font-medium">Part of {event.title}.</span>{" "}
+              <span className="text-fog-2">
+                {dropPhase === "live"
+                  ? "The drop is live now."
+                  : upcoming && availability.state === "upcoming"
+                    ? `Goes on sale at ${formatLaunchTime(availability.availableFrom, now)}${Date.parse(availability.availableFrom) - now <= 3600_000 ? ` (in ${formatCountdown(Date.parse(availability.availableFrom) - now)})` : ""}.`
+                    : ""}
+                {event.capacity ? ` Room for ${event.capacity} at the pop-up.` : ""}
+              </span>
+            </p>
+          </div>
+        ) : null}
+
         {reward ? (
           <div className="flex items-start gap-2.5 rounded-xl border border-sky/30 bg-sky/8 px-3 py-2.5 text-sm">
             <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-sky" aria-hidden="true" />
@@ -284,14 +325,19 @@ function ProductBody({ product, onViewCart }: { product: Product; onViewCart: ()
           />
           <Button
             size="lg"
+            data-testid="add-to-cart"
             className={cn(
-              "min-w-[9.5rem] flex-1",
+              "min-w-[9.5rem] flex-1 tabular",
               addedAt !== null && "bg-mint text-night hover:bg-mint",
             )}
             disabled={Boolean(problem) || soldOut}
             onClick={add}
             leading={
-              addedAt !== null ? <Check className="h-5 w-5" aria-hidden="true" /> : undefined
+              addedAt !== null ? (
+                <Check className="h-5 w-5" aria-hidden="true" />
+              ) : upcoming ? (
+                <Clock className="h-5 w-5" aria-hidden="true" />
+              ) : undefined
             }
             aria-live="polite"
           >
@@ -299,14 +345,18 @@ function ProductBody({ product, onViewCart }: { product: Product; onViewCart: ()
               ? "Added"
               : soldOut
                 ? "Sold out"
-                : problem &&
-                    Object.keys(selection).length === 0 &&
-                    product.variantGroups.some((g) => g.required)
-                  ? problem
-                  : "Add to cart"}
+                : upcoming && availability.state === "upcoming"
+                  ? Date.parse(availability.availableFrom) - now <= 3600_000
+                    ? `Drops in ${formatCountdown(Date.parse(availability.availableFrom) - now)}`
+                    : `Drops ${formatLaunchTime(availability.availableFrom, now)}`
+                  : problem &&
+                      Object.keys(selection).length === 0 &&
+                      product.variantGroups.some((g) => g.required)
+                    ? problem
+                    : "Add to cart"}
           </Button>
         </div>
-        {problem && !soldOut && Object.keys(selection).length > 0 ? (
+        {problem && !soldOut && !upcoming && Object.keys(selection).length > 0 ? (
           <p className="text-sm text-danger">{problem}</p>
         ) : null}
         {everAdded ? (

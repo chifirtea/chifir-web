@@ -256,7 +256,7 @@ export async function orderRewardIds(
   const ids = distinct(order.items.map((i) => i.digitalRewardId));
   const paidAt = order.paidAt ? Date.parse(order.paidAt) : Date.parse(order.placedAt);
   for (const eventId of distinct(order.items.map((i) => i.eventId))) {
-    const event = await ds.getEvent(eventId);
+    const event = await ds.getEvent(eventId, { now: new Date(paidAt) });
     if (event?.rewardId && isEventLive(event, paidAt) && !ids.includes(event.rewardId))
       ids.push(event.rewardId);
   }
@@ -302,8 +302,8 @@ export async function grantOrderRewards(
 export async function completeOrder(
   order: Order,
   ds: DataSource = getDataSource(),
+  now: Date = new Date(),
 ): Promise<Order> {
-  const now = new Date();
 
   for (const offerId of distinct(order.items.map((i) => i.offerId))) {
     const counted = await ds.redeemOffer(offerId);
@@ -345,7 +345,7 @@ export async function completeOrder(
   const records: AnalyticsRecord[] = [record];
   const paidAt = order.paidAt ? Date.parse(order.paidAt) : now.getTime();
   for (const eventId of distinct(order.items.map((i) => i.eventId))) {
-    const event = await ds.getEvent(eventId);
+    const event = await ds.getEvent(eventId, { now: new Date(paidAt) });
     if (!event || event.kind !== "launch") continue;
     const items = order.items.filter((i) => i.eventId === eventId);
     records.push({

@@ -119,17 +119,17 @@ export class StaticDataSource implements DataSource {
       params,
     );
   }
-  async listProducts(merchantId: string): Promise<Product[]> {
-    return this.fresh()
+  async listProducts(merchantId: string, options: SnapshotOptions = {}): Promise<Product[]> {
+    return this.fresh(options.now?.getTime())
       .products.filter((p) => p.merchantId === merchantId && p.active)
       .sort((a, b) => a.sortOrder - b.sortOrder);
   }
-  async getProduct(id: string): Promise<Product | null> {
-    return this.fresh().products.find((p) => p.id === id && p.active) ?? null;
+  async getProduct(id: string, options: SnapshotOptions = {}): Promise<Product | null> {
+    return this.fresh(options.now?.getTime()).products.find((p) => p.id === id && p.active) ?? null;
   }
-  async getProducts(ids: string[]): Promise<Product[]> {
+  async getProducts(ids: string[], options: SnapshotOptions = {}): Promise<Product[]> {
     const set = new Set(ids);
-    return this.fresh().products.filter((p) => set.has(p.id) && p.active);
+    return this.fresh(options.now?.getTime()).products.filter((p) => set.has(p.id) && p.active);
   }
   async searchProducts(params: ProductSearchParams): Promise<Product[]> {
     const s = this.fresh();
@@ -159,12 +159,12 @@ export class StaticDataSource implements DataSource {
       .sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt))
       .slice(0, params.limit ?? 50);
   }
-  async getEvent(id: string): Promise<CityEvent | null> {
-    return this.fresh().events.find((e) => e.id === id) ?? null;
+  async getEvent(id: string, options: SnapshotOptions = {}): Promise<CityEvent | null> {
+    return this.fresh(options.now?.getTime()).events.find((e) => e.id === id) ?? null;
   }
-  async listOffers(merchantId?: string): Promise<Offer[]> {
-    const now = Date.now();
-    return this.fresh().offers.filter(
+  async listOffers(merchantId?: string, options: SnapshotOptions = {}): Promise<Offer[]> {
+    const now = options.now?.getTime() ?? Date.now();
+    return this.fresh(now).offers.filter(
       (o) =>
         o.active &&
         (!merchantId || o.merchantId === merchantId) &&

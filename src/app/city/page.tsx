@@ -28,9 +28,8 @@ export default async function CityPage({ searchParams }: { searchParams: SearchP
   const to = first(sp.to)?.slice(0, 120);
   const ask = first(sp.ask)?.slice(0, 500);
   const checkout = first(sp.checkout);
-  const clockOffsetMs = allowClockOverride()
-    ? parseClockOverride(first(sp.clock)?.slice(0, 40))
-    : null;
+  const clockParam = first(sp.clock)?.slice(0, 40);
+  const clockOffsetMs = allowClockOverride() ? parseClockOverride(clockParam) : null;
   const snapshot = await getDataSource().getCitySnapshot(snapshotOptions(clockOffsetMs));
   return (
     <CityAppLoader
@@ -38,7 +37,7 @@ export default async function CityPage({ searchParams }: { searchParams: SearchP
       deepLinkTo={to}
       ask={ask}
       checkout={checkout}
-      {...(clockOffsetMs !== null ? { clockOffsetMs } : {})}
+      {...(clockOffsetMs !== null && clockParam ? { clockOffsetMs, clockParam } : {})}
     />
   );
 }

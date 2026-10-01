@@ -1,10 +1,23 @@
 "use client";
 
-import { useRef } from "react";
+import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
-import { CapsuleGeometry, Group, MeshStandardMaterial, SphereGeometry } from "three";
-import type { AvatarConfig } from "@/types/domain";
+import {
+  BoxGeometry,
+  CanvasTexture,
+  CapsuleGeometry,
+  CylinderGeometry,
+  Group,
+  MeshBasicMaterial,
+  MeshStandardMaterial,
+  PlaneGeometry,
+  SphereGeometry,
+  SRGBColorSpace,
+  TorusGeometry,
+} from "three";
+import type { AvatarConfig, RewardAppearance } from "@/types/domain";
 import { useQualityStore } from "@/engine/canvas/qualityStore";
+import { useAvatarStore } from "@/engine/store/avatarStore";
 import { playerRig } from "./playerRig";
 import { WALK_SPEED } from "./PlayerController";
 
@@ -45,6 +58,13 @@ interface SharedGeometry {
   arm: CapsuleGeometry;
   head: SphereGeometry;
   hair: SphereGeometry;
+  /** Outfit parts (hoodie): collar ring, bunched hood, kangaroo pocket, drawstring, print plane, zip. */
+  collar: TorusGeometry;
+  hood: SphereGeometry;
+  pocket: BoxGeometry;
+  string: CylinderGeometry;
+  print: PlaneGeometry;
+  zip: BoxGeometry;
 }
 
 let geometry: SharedGeometry | null = null;
@@ -65,8 +85,95 @@ function getGeometry(): SharedGeometry {
     head: new SphereGeometry(HEAD_RADIUS, 18, 14),
     // A cap covering the top 55% of a slightly larger sphere reads as hair from any angle.
     hair: new SphereGeometry(HEAD_RADIUS + 0.015, 18, 8, 0, Math.PI * 2, 0, Math.PI * 0.55),
+    collar: new TorusGeometry(0.17, 0.05, 8, 18),
+    hood: new SphereGeometry(0.15, 12, 8),
+    pocket: new BoxGeometry(0.26, 0.11, 0.035),
+    string: new CylinderGeometry(0.008, 0.008, 0.18, 6),
+    print: new PlaneGeometry(0.28, 0.14),
+    zip: new BoxGeometry(0.018, 0.5, 0.012),
   };
   return geometry;
+}
+
+const printTextures = new Map<string, CanvasTexture>();
+
+/** Chest print: the item's text in its accent colour on a transparent canvas, cached per look. */
+function printTexture(text: string, color: string): CanvasTexture | null {
+  if (typeof document === "undefined" || !text.trim()) return null;
+  const key = `${text}|${color}`;
+  let tex = printTextures.get(key);
+  if (tex) return tex;
+  const canvas = document.createElement("canvas");
+  canvas.width = 256;
+  canvas.height = 128;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  ctx.clearRect(0, 0, 256, 128);
+  ctx.fillStyle = color;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  const words = text.toUpperCase().split(/\s+/).slice(0, 2);
+  const size = words.length > 1 ? 44 : Math.min(72, Math.max(40, 420 / Math.max(2, text.length)));
+  ctx.font = `800 ${size}px "Inter", "Helvetica Neue", Arial, sans-serif`;
+  if (words.length > 1) {
+    ctx.fillText(words[0] ?? "", 128, 42);
+    ctx.fillText(words[1] ?? "", 128, 88);
+  } else {
+    ctx.fillText(words[0] ?? "", 128, 64);
+  }
+  tex = new CanvasTexture(canvas);
+  tex.colorSpace = SRGBColorSpace;
+  tex.anisotropy = 2;
+  printTextures.set(key, tex);
+  return tex;
+}
+
+const printMaterials = new Map<string, MeshBasicMaterial>();
+function printMaterial(text: string, color: string): MeshBasicMaterial | null {
+  const key = `${text}|${color}`;
+  let mat = printMaterials.get(key);
+  if (mat) return mat;
+  const map = printTexture(text, color);
+  if (!map) return null;
+  mat = new MeshBasicMaterial({ map, transparent: true, depthWrite: false, toneMapped: false });
+  printMaterials.set(key, mat);
+  return mat;
+}
+
+/**
+ * What the avatar wears over the base body, drawn from a reward's data-driven appearance: the
+ * engine knows a few silhouettes ("hoodie", "zip-hoodie"); colours and print come from the item.
+ */
+function Outfit({ outfit, castShadow }: { outfit: RewardAppearance; castShadow: boolean }) {
+  const geo = getGeometry();
+  const primary = outfit.primary ?? "#2a2d36";
+  const accent = outfit.accent ?? "#ffffff";
+  const style = outfit.style ?? "hoodie";
+  const shell = materialFor(primary, 0.85);
+  const trim = materialFor(accent, 0.6);
+  const print = useMemo(
+    () => (outfit.print && style !== "zip-hoodie" ? printMaterial(outfit.print, accent) : null),
+    [outfit.print, accent, style],
+  );
+  if (style !== "hoodie" && style !== "zip-hoodie") return null;
+  const neckY = SHOULDER_Y - HIP_Y + TORSO_RADIUS * 0.55;
+  return (
+    <group>
+      {/* Collar around the neck and the hood bunched behind it. */}
+      <mesh geometry={geo.collar} material={shell} position={[0, neckY, -0.01]} rotation={[Math.PI / 2, 0, 0]} castShadow={castShadow} />
+      <mesh geometry={geo.hood} material={shell} position={[0, neckY - 0.02, -0.16]} scale={[1.15, 0.8, 0.7]} castShadow={castShadow} />
+      {/* Kangaroo pocket low on the torso front. */}
+      <mesh geometry={geo.pocket} material={shell} position={[0, TORSO_Y - HIP_Y - 0.14, TORSO_RADIUS - 0.005]} />
+      {/* Drawstrings in the accent colour. */}
+      <mesh geometry={geo.string} material={trim} position={[-0.055, neckY - 0.12, TORSO_RADIUS - 0.02]} />
+      <mesh geometry={geo.string} material={trim} position={[0.055, neckY - 0.12, TORSO_RADIUS - 0.02]} />
+      {style === "zip-hoodie" ? (
+        <mesh geometry={geo.zip} material={trim} position={[0, TORSO_Y - HIP_Y + 0.02, TORSO_RADIUS + 0.004]} />
+      ) : print ? (
+        <mesh geometry={geo.print} material={print} position={[0, TORSO_Y - HIP_Y + 0.07, TORSO_RADIUS + 0.006]} />
+      ) : null}
+    </group>
+  );
 }
 
 function materialFor(color: string, roughness = 0.75): MeshStandardMaterial {
@@ -90,6 +197,8 @@ interface BodyProps {
   bodyColor: string;
   hairColor: string;
   castShadow: boolean;
+  /** Worn over the body; its primary colour replaces the body colour on the torso and arms. */
+  outfit?: RewardAppearance | null;
   /** Where to read the horizontal speed each frame; undefined = the player rig. */
   speedRef?: SpeedSource;
   runningRef?: { readonly running: boolean };
@@ -100,6 +209,7 @@ function AvatarBody({
   bodyColor,
   hairColor,
   castShadow,
+  outfit,
   speedRef,
   runningRef,
   phase = 0,
@@ -129,7 +239,7 @@ function AvatarBody({
     if (torso.current) torso.current.rotation.x = (running ? LEAN_RUN : LEAN_WALK) * f;
   });
 
-  const bodyMat = materialFor(bodyColor);
+  const bodyMat = materialFor(outfit?.primary ?? bodyColor, outfit ? 0.85 : 0.75);
   const hairMat = materialFor(hairColor, 0.9);
   const skinMat = materialFor(SKIN, 0.8);
   const trouserMat = materialFor(TROUSERS, 0.85);
@@ -162,20 +272,26 @@ function AvatarBody({
           castShadow={castShadow}
         />
         <mesh geometry={geo.hair} material={hairMat} position={[0, HEAD_Y - HIP_Y, 0]} />
+        {outfit ? <Outfit outfit={outfit} castShadow={castShadow} /> : null}
       </group>
     </group>
   );
 }
 
-/** The player's avatar. Animates from `playerRig`; always casts a shadow. */
-export function Avatar({ avatar }: { avatar?: AvatarConfig }) {
+/**
+ * The player's avatar. Animates from `playerRig`; always casts a shadow. Wears whatever the
+ * entitlement layer equipped (via the avatar store) unless an `outfit` is given explicitly.
+ */
+export function Avatar({ avatar, outfit }: { avatar?: AvatarConfig; outfit?: RewardAppearance | null }) {
   const cfg = avatar ?? DEFAULT_AVATAR;
+  const equipped = useAvatarStore((s) => s.outfit);
   return (
     <AvatarBody
       bodyColor={cfg.bodyColor}
       hairColor={cfg.hairColor}
       castShadow
       runningRef={playerRig}
+      outfit={outfit === undefined ? equipped : outfit}
     />
   );
 }
@@ -183,6 +299,8 @@ export function Avatar({ avatar }: { avatar?: AvatarConfig }) {
 export interface NpcAvatarProps {
   bodyColor: string;
   hairColor: string;
+  /** Remote players pass the outfit they broadcast; ambient NPCs wear none. */
+  outfit?: RewardAppearance | null;
   /** Ref-like holder the walker system updates each frame (m/s). Omit for a standing NPC. */
   speedRef?: SpeedSource;
   /** Initial walk-cycle phase so a crowd does not march in lockstep. */
@@ -192,7 +310,7 @@ export interface NpcAvatarProps {
 const STILL: SpeedSource = { current: 0 };
 
 /** Ambient walker. Same body as the player; skips shadows on the low tier. */
-export function NpcAvatar({ bodyColor, hairColor, speedRef, phase }: NpcAvatarProps) {
+export function NpcAvatar({ bodyColor, hairColor, outfit, speedRef, phase }: NpcAvatarProps) {
   const tier = useQualityStore((s) => s.settings.tier);
   return (
     <AvatarBody
@@ -201,6 +319,7 @@ export function NpcAvatar({ bodyColor, hairColor, speedRef, phase }: NpcAvatarPr
       castShadow={tier !== "low"}
       speedRef={speedRef ?? STILL}
       phase={phase}
+      outfit={outfit ?? null}
     />
   );
 }
