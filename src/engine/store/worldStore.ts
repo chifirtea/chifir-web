@@ -46,6 +46,10 @@ export interface WorldState {
   activeHotspot: Hotspot | null;
   focusedProductId: string | null;
   talkingToMerchantId: string | null;
+  /** Merchant whose overview sheet is open (AI `open_merchant`, card "Details"). */
+  merchantPanelId: string | null;
+  /** Parcel whose door is lit up in-world (AI `highlight_storefront`, party pings). */
+  highlightedParcelId: string | null;
   conciergeOpen: boolean;
   cartOpen: boolean;
   placesOpen: boolean;
@@ -69,6 +73,8 @@ export interface WorldState {
   setActiveHotspot: (hotspot: Hotspot | null) => void;
   setFocusedProduct: (productId: string | null) => void;
   setTalkingTo: (merchantId: string | null) => void;
+  setMerchantPanel: (merchantId: string | null) => void;
+  setHighlightedParcel: (parcelId: string | null) => void;
   setConciergeOpen: (open: boolean, seed?: string | null) => void;
   setCartOpen: (open: boolean) => void;
   setPlacesOpen: (open: boolean) => void;
@@ -85,6 +91,8 @@ export const useWorldStore = create<WorldState>((set, get) => ({
   activeHotspot: null,
   focusedProductId: null,
   talkingToMerchantId: null,
+  merchantPanelId: null,
+  highlightedParcelId: null,
   conciergeOpen: false,
   cartOpen: false,
   placesOpen: false,
@@ -119,6 +127,11 @@ export const useWorldStore = create<WorldState>((set, get) => ({
   },
   setFocusedProduct: (focusedProductId) => set({ focusedProductId }),
   setTalkingTo: (talkingToMerchantId) => set({ talkingToMerchantId }),
+  setMerchantPanel: (merchantPanelId) => set({ merchantPanelId }),
+  setHighlightedParcel: (highlightedParcelId) => {
+    if (get().highlightedParcelId === highlightedParcelId) return;
+    set({ highlightedParcelId });
+  },
   setConciergeOpen: (conciergeOpen, seed = null) =>
     set({ conciergeOpen, conciergeSeed: conciergeOpen ? seed : null }),
   setCartOpen: (cartOpen) => set({ cartOpen }),
@@ -127,6 +140,7 @@ export const useWorldStore = create<WorldState>((set, get) => ({
     set({
       focusedProductId: null,
       talkingToMerchantId: null,
+      merchantPanelId: null,
       conciergeOpen: false,
       cartOpen: false,
       placesOpen: false,
@@ -138,6 +152,7 @@ export const selectInputLocked = (s: WorldState): boolean =>
   s.transition !== "idle" ||
   s.focusedProductId !== null ||
   s.talkingToMerchantId !== null ||
+  s.merchantPanelId !== null ||
   s.conciergeOpen ||
   s.cartOpen ||
   s.placesOpen;

@@ -8,19 +8,24 @@ import { useChatStream } from "./useChatStream";
 import { useIsPhone } from "./useIsPhone";
 
 export const CONCIERGE_SUGGESTIONS = [
-  "I'm hungry. Something spicy under $25.",
-  "Date night, budget $300: dinner, flowers, an outfit.",
-  "What's happening tonight?",
-  "We're four people with $100.",
+  "Spicy food under $25.",
+  "We are two people, budget $60, something healthy.",
+  "I need a black hoodie under $150.",
+  "Take me somewhere popular.",
 ];
 
 /**
  * The city concierge. Bound to `worldStore.conciergeOpen`; a `conciergeSeed` (deep link `?ask=`
  * or a HUD shortcut) is sent once when the drawer opens and then cleared. Right-hand drawer on
  * desktop, bottom sheet on phones. Chat history survives closing the drawer for the session.
+ *
+ * When the AI opens a product sign or a merchant sheet (`open_product` / `open_merchant`), the
+ * drawer slides away so that panel is in front, and comes back when it closes; the thread keeps
+ * streaming underneath.
  */
 export function ConciergeDrawer() {
   const open = useWorldStore((s) => s.conciergeOpen);
+  const yielded = useWorldStore((s) => s.focusedProductId !== null || s.merchantPanelId !== null);
   const seed = useWorldStore((s) => s.conciergeSeed);
   const setConciergeOpen = useWorldStore((s) => s.setConciergeOpen);
   const isPhone = useIsPhone();
@@ -36,7 +41,7 @@ export function ConciergeDrawer() {
 
   return (
     <Drawer
-      open={open}
+      open={open && !yielded}
       onClose={() => setConciergeOpen(false)}
       eyebrow="City concierge"
       title="What should we do tonight?"

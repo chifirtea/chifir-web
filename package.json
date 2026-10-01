@@ -18,6 +18,7 @@
     "format:check": "prettier --check .",
     "check": "pnpm typecheck && pnpm lint && pnpm test",
     "db:seed": "tsx scripts/seed.ts",
+    "ai:eval": "tsx --conditions=react-server scripts/ai-eval.ts",
     "e2e": "playwright test",
     "size": "node scripts/check-bundle-size.mjs"
   },

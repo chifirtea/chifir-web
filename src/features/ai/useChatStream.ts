@@ -2,8 +2,9 @@
 
 import { clockHeaders } from "@/lib/time/clientClock";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { AIAction, ChatRequest, ChatScope, ChatStreamEvent } from "@/lib/ai/actions";
+import { autoExecutes, type AIAction, type ChatRequest, type ChatScope, type ChatStreamEvent } from "@/lib/ai/actions";
 import { parseSseChunk } from "@/lib/ai/sse";
+import { validateAIAction } from "@/lib/ai/validateAction";
 import { track } from "@/lib/analytics/client";
 import { randomId } from "@/lib/utils/ids";
 import {
@@ -14,6 +15,7 @@ import {
 import { useWorldStore } from "@/engine/store/worldStore";
 import { useCartStore } from "@/features/cart/cartStore";
 import { executeAIAction } from "@/city/cityActions";
+import { getCityIndex } from "@/city/cityStore";
 import type { MerchantCard, ProductCard } from "@/types/domain";
 
 export interface UiMessage {
@@ -22,7 +24,7 @@ export interface UiMessage {
   text: string;
   cards?: { merchants?: MerchantCard[]; products?: ProductCard[] };
   actions?: AIAction[];
-  /** Index into `actions` -> whether the auto-executed action (propose_cart) succeeded. */
+  /** Index into `actions` -> whether the auto-executed action succeeded (see `autoExecutes`). */
   executed?: Record<number, boolean>;
   toolsUsed?: string[];
   /** The turn ended in an error; `text` holds the friendly message when nothing was streamed. */
@@ -187,14 +189,22 @@ export function useChatStream(
             patchAssistant(assistantId, (m) => ({ ...m, cards: mergeCards(m.cards, event) }));
             break;
           case "action": {
-            // Cart proposals were validated server-side; apply them exactly once, on arrival.
-            const executed =
-              event.action.type === "propose_cart" ? executeAIAction(event.action) : undefined;
+            // Every id is checked against the city index before anything runs; an action that
+            // names something not in the city is dropped and counted, never executed.
+            const verdict = validateAIAction(event.action, getCityIndex());
+            if (!verdict.ok) {
+              track("ai_action_executed", { action: event.action.type, accepted: false });
+              break;
+            }
+            const action = verdict.action;
+            // Panels, highlights, picks and server-priced cart proposals run on arrival, exactly
+            // once; teleports keep their one-tap confirm chip.
+            const executed = autoExecutes(action) ? executeAIAction(action) : undefined;
             patchAssistant(assistantId, (m) => {
               const index = m.actions?.length ?? 0;
               return {
                 ...m,
-                actions: [...(m.actions ?? []), event.action],
+                actions: [...(m.actions ?? []), action],
                 ...(executed !== undefined
                   ? { executed: { ...(m.executed ?? {}), [index]: executed } }
                   : {}),

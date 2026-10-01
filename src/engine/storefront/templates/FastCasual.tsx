@@ -3,15 +3,19 @@
 import { useMemo } from "react";
 import type { Parcel } from "@/types/domain";
 import { StaticInstances, type InstanceTransform } from "@/engine/environment/StaticInstances";
+import { useCityStore } from "@/city/cityStore";
 import type { StorefrontTemplateDef, StorefrontTemplateProps } from "../types";
+import { houseNumber } from "../hours";
 import {
   AccentStrip,
   Awning,
   Door,
   GEO,
+  HeroWindow,
   Logo,
   MAT,
   MenuBoard,
+  OpenSign,
   Shell,
   SignPlane,
   Vitrine,
@@ -24,8 +28,9 @@ import {
 } from "./parts";
 
 /**
- * Fast casual: one wide, tall floor of glass with a neon band along the top, a big sign over the
- * entrance, a flat canopy and a menu board mounted on the window.
+ * Fast casual: one wide, tall floor of glass with a lit band along the top, a big sign over the
+ * entrance, a flat canopy and a menu board on the window. Through the glass you see the room
+ * (the merchant's hero image, dimmed), not a flat glowing pane.
  */
 
 const SPEC = { side: 0.8, front: 1.5, back: 1.5, floors: 1, floorHeight: 4.4, parapet: 0.6 };
@@ -39,6 +44,7 @@ function FastCasualComponent({ merchant, parcel, quality, lod }: StorefrontTempl
   const cfg = merchant.storefrontConfig;
   const brand = merchant.brand;
   const frame = useMemo(() => frameFor(parcel), [parcel]);
+  const products = useCityStore((s) => s.index?.productsByMerchant[merchant.id]);
   const glassW = (frame.w * 0.92 - DOOR_W - 1.0) / 2;
   const glassX = DOOR_W / 2 + 0.5 + glassW / 2;
   const glassY = 1.75;
@@ -57,21 +63,22 @@ function FastCasualComponent({ merchant, parcel, quality, lod }: StorefrontTempl
     return out;
   }, [glassW, glassX, glassY, glassH, frame.faceZ]);
   const signW = Math.min(frame.w * 0.7, 8.4);
+  const number = houseNumber(merchant.address?.line1, parcel.position);
 
   return (
     <group>
-      <Shell frame={frame} merchant={merchant} lod={lod} />
-      <SignPlane text={signText(merchant)} style={cfg.signStyle} brand={brand} position={[0, 3.55, frame.faceZ + 0.1]} width={signW} aspect={7} />
+      <Shell frame={frame} merchant={merchant} lod={lod} roofUnits={2} seed={parcel.slug} />
+      <SignPlane text={signText(merchant)} style={cfg.signStyle} brand={brand} position={[0, 3.55, frame.faceZ + 0.12]} width={signW} aspect={7} subtext={cfg.signStyle === "painted" ? merchant.tagline : undefined} />
       {lod < 2 &&
         (display === "none"
           ? [-1, 1].map((side) => (
-              <mesh key={side} geometry={GEO.plane} material={MAT.glassDark} position={[side * glassX, glassY, frame.faceZ + 0.02]} scale={[glassW, glassH, 1]} />
+              <HeroWindow key={side} merchant={merchant} x={side * glassX} y={glassY} width={glassW} height={glassH} z={frame.faceZ + 0.02} depth={0.7} />
             ))
           : [-1, 1].map((side) => (
-              <Vitrine key={side} frame={frame} x={side * glassX} y={glassY} width={glassW} height={glassH} depth={0.7} brand={brand} lod={lod} contents={display} />
+              <Vitrine key={side} frame={frame} x={side * glassX} y={glassY} width={glassW} height={glassH} depth={0.7} brand={brand} lod={lod} contents={display} products={products} quality={quality} />
             )))}
       {lod < 2 && display === "none" && <StaticInstances geometry={GEO.box} material={MAT.frame} items={mullions} />}
-      {lod < 2 && <Door frame={frame} x={0} width={DOOR_W} height={2.7} brand={brand} lod={lod} />}
+      {lod < 2 && <Door frame={frame} x={0} width={DOOR_W} height={2.7} brand={brand} lod={lod} number={number} matLabel={merchant.name} />}
       {lod < 2 && (
         <AccentStrip
           brand={brand}
@@ -88,8 +95,8 @@ function FastCasualComponent({ merchant, parcel, quality, lod }: StorefrontTempl
       {lod === 0 && cfg.windowDisplay === "menu" && (
         <MenuBoard merchant={merchant} position={[DOOR_W / 2 + 1.35, 1.6, frame.faceZ + (display === "none" ? 0.1 : 0.82)]} lod={lod} width={0.85} />
       )}
-      {lod === 0 && <Logo merchant={merchant} position={[-(DOOR_W / 2 + 1.4), 2.3, frame.faceZ + (display === "none" ? 0.1 : 0.82)]} size={0.95} />}
-      {lod <= 1 && <mesh geometry={GEO.box} material={MAT.roof} position={[frame.w * 0.28, frame.h + 0.4, frame.cz - 1]} scale={[1.8, 0.8, 1.3]} castShadow />}
+      {lod === 0 && <OpenSign merchant={merchant} position={[-(DOOR_W / 2 + 0.95), 2.6, frame.faceZ + 0.1]} width={0.6} />}
+      {lod === 0 && <Logo merchant={merchant} position={[-(DOOR_W / 2 + 2.2), 2.1, frame.faceZ + (display === "none" ? 0.1 : 0.82)]} size={0.95} />}
     </group>
   );
 }

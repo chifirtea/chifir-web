@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import { Check, Eye, MapPin, Navigation, Plus, Send, Square } from "lucide-react";
+import { Check, Eye, Info, MapPin, Navigation, Plus, Send, Sparkles, Square, Store, Zap } from "lucide-react";
 import { Badge, Button, Price, ProductImage, Spinner } from "@/components/ui";
 import { cn } from "@/lib/utils/cn";
 import type { AIAction } from "@/lib/ai/actions";
-import { executeAIAction, inspectProduct } from "@/city/cityActions";
+import { formatLaunchTime } from "@/lib/events/status";
+import { now as clockNow } from "@/lib/time/clock";
+import { executeAIAction } from "@/city/cityActions";
 import { useCityStore } from "@/city/cityStore";
 import { DietaryChips, SpiceFlames } from "@/features/catalog/attributes";
 import type { MerchantCard, ProductCard } from "@/types/domain";
@@ -38,6 +40,10 @@ const TOOL_LABEL: Record<string, string> = {
   propose_cart: "Pricing your cart",
   escalate_to_human: "Calling someone over",
   recommend_items: "Picking items",
+  recommend: "Picking the best fits",
+  highlight_storefront: "Lighting up the door",
+  open_merchant: "Opening the place",
+  open_product: "Opening the item",
 };
 
 /**
@@ -180,6 +186,7 @@ export function MerchantCardView({ card }: { card: MerchantCard }) {
   const [confirm, setConfirm] = useState(false);
   const teleport: AIAction = { type: "navigate", mode: "teleport", target: { kind: "merchant", merchantId: card.id }, label: card.name };
   const guide: AIAction = { type: "navigate", mode: "guide", target: { kind: "merchant", merchantId: card.id }, label: card.name };
+  const details: AIAction = { type: "open_merchant", merchantId: card.id };
   return (
     <article className="sign w-full overflow-hidden rounded-xl">
       <div className="h-1.5" style={{ background: `linear-gradient(90deg, ${card.brand.primary}, ${card.brand.secondary} 60%, ${card.brand.accent})` }} />
@@ -222,6 +229,9 @@ export function MerchantCardView({ card }: { card: MerchantCard }) {
               <Button size="sm" variant="secondary" onClick={() => executeAIAction(guide)} leading={<MapPin className="h-4 w-4" />}>
                 Guide me
               </Button>
+              <Button size="sm" variant="ghost" onClick={() => executeAIAction(details)} leading={<Info className="h-4 w-4" />}>
+                Details
+              </Button>
             </>
           )}
         </div>
@@ -234,6 +244,8 @@ export function ProductCardView({ card }: { card: ProductCard }) {
   const brand = useCityStore((s) => s.index?.merchantsById[card.merchantId]?.brand);
   const [added, setAdded] = useState<boolean | null>(null);
   const soldOut = card.inventoryStatus === "out_of_stock";
+  // A drop item: visible, not purchasable until its window opens (same rule as pricing).
+  const dropsAt = card.availableFrom && clockNow() < Date.parse(card.availableFrom) ? card.availableFrom : null;
   return (
     <article className="sign flex w-full gap-3 rounded-xl p-2.5">
       <ProductImage src={card.imageUrl} alt="" label={card.title} brand={brand} className="h-20 w-20 shrink-0 rounded-lg" />
@@ -247,20 +259,28 @@ export function ProductCardView({ card }: { card: ProductCard }) {
           {card.spiceLevel ? <SpiceFlames level={card.spiceLevel} /> : null}
           <DietaryChips tags={card.dietary} compact />
           {card.etaLabel ? <Badge>{card.etaLabel}</Badge> : null}
-          {soldOut ? <Badge tone="danger">Sold out</Badge> : card.inventoryStatus === "low_stock" ? <Badge tone="sodium">Low stock</Badge> : null}
+          {dropsAt ? (
+            <Badge tone="sodium">Drops at {formatLaunchTime(dropsAt, clockNow())}</Badge>
+          ) : soldOut ? (
+            <Badge tone="danger">Sold out</Badge>
+          ) : card.inventoryStatus === "low_stock" ? (
+            <Badge tone="sodium">Low stock</Badge>
+          ) : null}
         </div>
         <div className="mt-2 flex items-center gap-2">
-          <Button size="sm" variant="secondary" onClick={() => inspectProduct(card.id, "ai")} leading={<Eye className="h-4 w-4" />}>
+          <Button size="sm" variant="secondary" onClick={() => executeAIAction({ type: "open_product", productId: card.id })} leading={<Eye className="h-4 w-4" />}>
             Look
           </Button>
-          <Button
-            size="sm"
-            disabled={soldOut || added === true}
-            onClick={() => setAdded(executeAIAction({ type: "propose_cart", items: [{ productId: card.id, quantity: 1 }] }))}
-            leading={added ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-          >
-            {added ? "Added" : "Add"}
-          </Button>
+          {dropsAt ? null : (
+            <Button
+              size="sm"
+              disabled={soldOut || added === true}
+              onClick={() => setAdded(executeAIAction({ type: "propose_cart", items: [{ productId: card.id, quantity: 1 }] }))}
+              leading={added ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+            >
+              {added ? "Added" : "Add"}
+            </Button>
+          )}
           {added === false ? <span className="text-xs text-fog-3">Choose options first</span> : null}
         </div>
       </div>
@@ -272,8 +292,74 @@ export function ActionCardView({ action, executed }: { action: AIAction; execute
   const [confirm, setConfirm] = useState(false);
   const [done, setDone] = useState(false);
   const merchantName = useCityStore((s) =>
-    action.type === "escalate" ? s.index?.merchantsById[action.merchantId]?.name : undefined,
+    action.type === "escalate" || action.type === "open_merchant" || action.type === "highlight_storefront"
+      ? s.index?.merchantsById[action.merchantId]?.name
+      : undefined,
   );
+  const productTitle = useCityStore((s) =>
+    action.type === "open_product" ? s.index?.productsById[action.productId]?.title : undefined,
+  );
+
+  if (action.type === "recommend") {
+    return (
+      <div className="flex items-start gap-2 rounded-xl border border-sodium/30 bg-sodium/10 px-3 py-2 text-[13px] text-sodium" data-testid="ai-recommend">
+        <Sparkles className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+        <div className="min-w-0">
+          <p className="font-medium">
+            {action.productIds.length + action.merchantIds.length === 1 ? "My pick" : "My picks"} are above
+          </p>
+          {action.reason ? <p className="text-fog-2">{action.reason}</p> : null}
+        </div>
+      </div>
+    );
+  }
+  if (action.type === "highlight_storefront") {
+    const teleport: AIAction = { type: "navigate", mode: "teleport", target: { kind: "merchant", merchantId: action.merchantId }, label: action.label };
+    return (
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-line bg-white/4 px-3 py-2 text-[13px]" data-testid="ai-highlight">
+        <Zap className={cn("h-4 w-4 shrink-0", executed === false ? "text-fog-3" : "text-sodium")} aria-hidden="true" />
+        <div className="min-w-0 flex-1">
+          <p className="font-medium text-fog">
+            {executed === false ? `${merchantName ?? action.label} is not on the street right now.` : `${merchantName ?? action.label}'s door is lit up.`}
+          </p>
+          {action.reason ? <p className="text-fog-2">{action.reason}</p> : null}
+        </div>
+        {done ? (
+          <span className="text-fog-2">On your way.</span>
+        ) : confirm ? (
+          <>
+            <Button size="sm" onClick={() => setDone(executeAIAction(teleport))} leading={<Check className="h-4 w-4" />}>
+              Yes, teleport
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setConfirm(false)}>
+              No
+            </Button>
+          </>
+        ) : (
+          <Button size="sm" variant="secondary" onClick={() => setConfirm(true)} leading={<Navigation className="h-4 w-4" />}>
+            Take me there
+          </Button>
+        )}
+      </div>
+    );
+  }
+  if (action.type === "open_merchant" || action.type === "open_product") {
+    const name = action.type === "open_merchant" ? merchantName : productTitle;
+    const Icon = action.type === "open_merchant" ? Store : Eye;
+    return (
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-line bg-white/4 px-3 py-2 text-[13px]">
+        <Icon className="h-4 w-4 shrink-0 text-sodium" aria-hidden="true" />
+        <p className="min-w-0 flex-1 font-medium text-fog">
+          {executed === false ? "That one is not in the city right now." : `Opened ${name ?? (action.type === "open_merchant" ? "the place" : "the item")}.`}
+        </p>
+        {executed !== false ? (
+          <Button size="sm" variant="ghost" onClick={() => executeAIAction(action)}>
+            Open again
+          </Button>
+        ) : null}
+      </div>
+    );
+  }
 
   if (action.type === "propose_cart") {
     return (

@@ -1,4 +1,5 @@
 import type { CityEvent } from "@/types/domain";
+import { eventPhase, formatLaunchTime } from "@/lib/events/status";
 
 /** Next live or scheduled event tied to a merchant or parcel: live first, then soonest start. */
 export function nextEventFor(events: CityEvent[], merchantId?: string, parcelId?: string): CityEvent | null {
@@ -37,4 +38,17 @@ export function eventHotspotLabel(event: CityEvent, venueName: string, now = Dat
   if (isSameLocalDay(event.startsAt, now)) return `Tonight at ${venueName}`;
   const day = new Date(event.startsAt).toLocaleDateString(undefined, { weekday: "long" });
   return `${day} at ${venueName}`;
+}
+
+/**
+ * Clock-derived "when" for signage: "Live now · until 10:00 PM", "Tonight · 8:00 PM" or
+ * "Oct 3, 8:00 PM". Prefer this over `eventTimeLabel` wherever `now()` is available: the
+ * stored status never flips on its own (ADR-005).
+ */
+export function eventWhenLabel(event: Pick<CityEvent, "startsAt" | "endsAt" | "status">, now: number): string {
+  const phase = eventPhase(event, now);
+  if (phase === "live") return `Live now · until ${formatLaunchTime(event.endsAt, now)}`;
+  if (phase === "ended") return "Ended";
+  const when = formatLaunchTime(event.startsAt, now);
+  return isSameLocalDay(event.startsAt, now) ? `Tonight · ${when}` : when;
 }

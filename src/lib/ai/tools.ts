@@ -1,8 +1,8 @@
 import "server-only";
-import { eventPhase } from "@/lib/events/status";
+import { eventPhase, productAvailability } from "@/lib/events/status";
 import { z } from "zod";
 import type { CatalogSource } from "@/lib/data/types";
-import { isOpenNow } from "@/lib/data/search";
+import { isOpenNow, popularityScore } from "@/lib/data/search";
 import {
   bestOfferFor,
   computeTotals,
@@ -26,6 +26,7 @@ import type {
   Weekday,
 } from "@/types/domain";
 import type { ChatScope, ChatStreamEvent } from "./actions";
+import { cityTimezone, formatCityTime, storefrontParcelFor } from "./cityMap";
 import { defineTool, type ToolDef } from "./provider";
 
 /**
@@ -87,6 +88,12 @@ const searchMerchantsSchema = z.object({
     .max(6)
     .optional()
     .describe('Any-of tags, e.g. ["spicy","late-night","date-night"].'),
+  sort: z
+    .enum(["relevance", "popular"])
+    .optional()
+    .describe(
+      '"popular" ranks by rating weighted by review count (sponsored breaks ties): use it for "somewhere popular", "the best place", "where everyone goes".',
+    ),
   limit: z.number().int().min(1).max(MAX_MERCHANTS).optional(),
 });
 
@@ -179,13 +186,39 @@ const recommendItemsSchema = z.object({
   productIds: z.array(shortString(64)).min(1).max(8).describe("Ids from this merchant's catalog."),
 });
 
+const highlightStorefrontSchema = z.object({
+  merchantId: shortString(64).describe("A merchant id returned by a tool in this turn."),
+  reason: shortString(120).optional().describe('One line shown next to the highlight, e.g. "Hottest burger under $25".'),
+});
+
+const openMerchantSchema = z.object({
+  merchantId: shortString(64).describe("A merchant id returned by a tool in this turn."),
+});
+
+const openProductSchema = z.object({
+  productId: shortString(64).describe("A product id returned by a tool in this turn."),
+});
+
+const recommendSchema = z
+  .object({
+    productIds: z.array(shortString(64)).max(6).optional().describe("Product ids from this turn's results, best first."),
+    merchantIds: z.array(shortString(64)).max(4).optional().describe("Merchant ids from this turn's results, best first."),
+    reason: shortString(160).describe('One line on why these fit, e.g. "Two bowls, both under $15, both gluten-free".'),
+  })
+  .refine((v) => (v.productIds?.length ?? 0) + (v.merchantIds?.length ?? 0) > 0, {
+    message: "Recommend at least one product or merchant id.",
+  });
+
 // ------------------------------------------------------------------------------------ helpers
 
 interface Geo {
   districtById: Map<string, District>;
   districtByMerchant: Map<string, District>;
   merchantById: Map<string, Merchant>;
+  parcels: Parcel[];
   offers: Offer[];
+  /** The city's wall-clock zone for "drops at 8 PM" phrasing. */
+  timezone: string;
 }
 
 const geoCache = new WeakMap<ToolContext, Promise<Geo>>();
@@ -217,7 +250,9 @@ function geoFor(ctx: ToolContext): Promise<Geo> {
         districtById,
         districtByMerchant,
         merchantById: new Map(merchants.map((m) => [m.id, m])),
+        parcels,
         offers,
+        timezone: cityTimezone(merchants),
       };
     })();
     geoCache.set(ctx, cached);
@@ -289,11 +324,29 @@ export interface LiveOfferSummary {
   unitPriceAfterCents: number;
 }
 
-/** Tool-result shape: the UI's ProductFact plus allergens (for strict dietary answers) and the best live offer. */
+/**
+ * Tool-result shape: the UI's ProductFact plus allergens (for strict dietary answers), the best
+ * live offer, and an explicit purchasability verdict so the model never has to infer "available
+ * now" from a price.
+ */
 export type ProductFactWithOffer = ProductFact & {
   allergens?: string[];
   liveOffer?: LiveOfferSummary;
+  /** False before a drop starts or after a window closes; the product is visible but cannot be bought. */
+  purchasableNow: boolean;
+  /** Human sentence for the model to relay when `purchasableNow` is false, in city time. */
+  availabilityNote?: string;
 };
+
+/** The sentence the AI should relay for a product that cannot be bought right now. */
+export function availabilityNoteFor(p: Product, now: Date, timeZone: string): string | undefined {
+  const a = productAvailability(p, now.getTime());
+  if (a.state === "upcoming") {
+    return `Not purchasable yet: drops ${formatCityTime(a.availableFrom, timeZone, now)} city time. Say when it drops; never call it available now.`;
+  }
+  if (a.state === "closed") return "No longer available: the purchase window has closed.";
+  return undefined;
+}
 
 /** Best applicable live offer, including code-gated ones (reported with their code). */
 export function liveOfferFor(
@@ -330,9 +383,11 @@ export function toProductFact(
   merchant: Merchant | undefined,
   offers: Offer[],
   now: Date,
+  timeZone: string = merchant?.openingHours?.timezone ?? "America/Chicago",
 ): ProductFactWithOffer {
   const etaLabel = etaLabelFor(merchant, p);
   const liveOffer = liveOfferFor(p, offers, now);
+  const availabilityNote = availabilityNoteFor(p, now, timeZone);
   return {
     id: p.id,
     merchantId: p.merchantId,
@@ -354,11 +409,17 @@ export function toProductFact(
     tags: p.tags,
     ...(p.attributes.occasion?.length ? { occasion: p.attributes.occasion } : {}),
     ...(p.attributes.serves !== undefined ? { serves: p.attributes.serves } : {}),
+    ...(p.availableFrom ? { availableFrom: p.availableFrom } : {}),
+    ...(p.availableUntil ? { availableUntil: p.availableUntil } : {}),
+    ...(p.eventId ? { eventId: p.eventId } : {}),
+    purchasableNow: availabilityNote === undefined && p.inventoryStatus !== "out_of_stock",
+    ...(availabilityNote ? { availabilityNote } : {}),
     ...(liveOffer ? { liveOffer } : {}),
   };
 }
 
-export function toProductCard(fact: ProductFact): ProductCard {
+export function toProductCard(fact: ProductFact & { purchasableNow?: boolean }): ProductCard {
+  const upcoming = fact.purchasableNow === false && fact.availableFrom;
   return {
     id: fact.id,
     merchantId: fact.merchantId,
@@ -371,6 +432,7 @@ export function toProductCard(fact: ProductFact): ProductCard {
     ...(fact.spiceLevel !== undefined ? { spiceLevel: fact.spiceLevel } : {}),
     ...(fact.dietary?.length ? { dietary: fact.dietary } : {}),
     ...(fact.etaLabel ? { etaLabel: fact.etaLabel } : {}),
+    ...(upcoming ? { availableFrom: fact.availableFrom } : {}),
   };
 }
 
@@ -526,9 +588,13 @@ export const searchMerchants: AiTool = defineTool({
     const cards = merchants.map((m) => toMerchantCard(m, ctx.now));
     const { json, value } = compactValue({
       count: cards.length,
+      ...(input.sort === "popular" ? { sortedBy: "popular (rating weighted by review count; first is the most popular)" } : {}),
       merchants: merchants.map((m, i) => ({
         ...cards[i]!,
         district: geo.districtByMerchant.get(m.id)?.name ?? null,
+        ratingCount: m.ratingCount,
+        sponsored: m.sponsored,
+        ...(input.sort === "popular" ? { popularity: Math.round(popularityScore(m) * 10) / 10 } : {}),
         tags: m.tags,
         description: trimText(m.description, 160),
       })),
@@ -560,10 +626,14 @@ export const searchProducts: AiTool = defineTool({
     });
     const geo = await geoFor(ctx);
     const facts = products.map((p) =>
-      toProductFact(p, geo.merchantById.get(p.merchantId), geo.offers, ctx.now),
+      toProductFact(p, geo.merchantById.get(p.merchantId), geo.offers, ctx.now, geo.timezone),
     );
+    const upcoming = facts.filter((f) => !f.purchasableNow).length;
     const { json, value } = compactValue({
       count: facts.length,
+      ...(upcoming
+        ? { note: `${upcoming} result(s) have purchasableNow=false: state their availabilityNote verbatim and offer what is purchasable now.` }
+        : {}),
       products: facts,
       ...(facts.length === 0
         ? {
@@ -602,7 +672,7 @@ export const getMerchant: AiTool = defineTool({
     const top = [...products]
       .sort((a, b) => Number(b.featured) - Number(a.featured) || a.sortOrder - b.sortOrder)
       .slice(0, 8)
-      .map((p) => toProductFact(p, m, offers, ctx.now));
+      .map((p) => toProductFact(p, m, offers, ctx.now, geo.timezone));
     const card = toMerchantCard(m, ctx.now);
     const f = m.fulfillment;
     const today = hoursToday(m, ctx.now);
@@ -868,6 +938,7 @@ export const proposeCart: AiTool = defineTool({
               geo.merchantById.get(productsById[a.productId]!.merchantId),
               offers,
               ctx.now,
+              geo.timezone,
             ),
           ),
         ),
@@ -943,7 +1014,7 @@ export const recommendItems: AiTool = defineTool({
     );
     const geo = await geoFor(ctx);
     const facts = products.map((p) =>
-      toProductFact(p, geo.merchantById.get(p.merchantId), geo.offers, ctx.now),
+      toProductFact(p, geo.merchantById.get(p.merchantId), geo.offers, ctx.now, geo.timezone),
     );
     const missing = input.productIds.filter((id) => !products.some((p) => p.id === id));
     const { json, value } = compactValue({
@@ -956,12 +1027,144 @@ export const recommendItems: AiTool = defineTool({
   },
 });
 
+export const recommend: AiTool = defineTool({
+  name: "recommend",
+  description:
+    "Present your picks: the two or three products and/or merchants you recommend, with one line on why. Use ids returned by other tools in THIS turn. Returns their live facts (price, availability, offer) so you can quote them, and marks the cards as recommended for the user. Call once per reply, after searching.",
+  schema: recommendSchema,
+  execute: async (input, ctx) => {
+    const pinned = scopedMerchantId(ctx);
+    const geo = await geoFor(ctx);
+    const products = (await ctx.ds.getProducts(input.productIds ?? [])).filter(
+      (p) => !pinned || p.merchantId === pinned,
+    );
+    const merchantIds = (input.merchantIds ?? []).filter((id) => !pinned || id === pinned);
+    const merchants = merchantIds.map((id) => geo.merchantById.get(id)).filter((m): m is Merchant => Boolean(m));
+    const facts = products.map((p) =>
+      toProductFact(p, geo.merchantById.get(p.merchantId), geo.offers, ctx.now, geo.timezone),
+    );
+    const unknownIds = [
+      ...(input.productIds ?? []).filter((id) => !products.some((p) => p.id === id)),
+      ...merchantIds.filter((id) => !merchants.some((m) => m.id === id)),
+    ];
+    if (facts.length === 0 && merchants.length === 0) {
+      return errorResult("None of those ids exist. Recommend only ids returned by a tool in this turn.");
+    }
+    const merchantCards = merchants.map((m) => toMerchantCard(m, ctx.now));
+    const { json, value } = compactValue({
+      recommended: true,
+      reason: input.reason,
+      products: facts,
+      merchants: merchantCards.map((c) => ({ ...c, district: geo.districtByMerchant.get(c.id)?.name ?? null })),
+      ...(unknownIds.length ? { unknownIds } : {}),
+      ...(facts.some((f) => !f.purchasableNow)
+        ? { note: "Some picks are not purchasable yet (purchasableNow=false). Say when they drop; do not call them available now." }
+        : {}),
+    });
+    if (merchantCards.length) ctx.emit({ type: "cards", merchants: merchantCards });
+    emitProductCards(ctx, facts, value.products);
+    ctx.emit({
+      type: "action",
+      action: {
+        type: "recommend",
+        productIds: value.products.map((p) => p.id),
+        merchantIds: merchantCards.map((c) => c.id),
+        reason: input.reason,
+      },
+    });
+    return json;
+  },
+});
+
+export const highlightStorefront: AiTool = defineTool({
+  name: "highlight_storefront",
+  description:
+    "Light up a merchant's storefront in the 3D city (a pulsing ring and beacon at its door) so the user can see where it is from the street. Use for your top pick when the user is on the street; pair with navigate when they want to go. Use a merchant id returned in this turn.",
+  schema: highlightStorefrontSchema,
+  execute: async (input, ctx) => {
+    const pinned = scopedMerchantId(ctx);
+    if (pinned && input.merchantId !== pinned) return errorResult("Only this merchant can be highlighted here.");
+    const merchant = await ctx.ds.getMerchant(input.merchantId);
+    if (!merchant) return errorResult(`Unknown merchant id "${input.merchantId}". Use ids from search results.`);
+    const geo = await geoFor(ctx);
+    const parcel = storefrontParcelFor(geo.parcels, merchant.id, ctx.now.getTime());
+    if (!parcel) return errorResult(`${merchant.name} has no open storefront in the city right now.`);
+    const district = geo.districtById.get(parcel.districtId)?.name ?? null;
+    ctx.emit({
+      type: "action",
+      action: {
+        type: "highlight_storefront",
+        merchantId: merchant.id,
+        parcelId: parcel.id,
+        label: merchant.name,
+        ...(input.reason ? { reason: input.reason } : {}),
+      },
+    });
+    return JSON.stringify({
+      ok: true,
+      merchantName: merchant.name,
+      district,
+      note: `${merchant.name}'s storefront is now highlighted for the user${district ? ` (${district})` : ""}. Mention where it is in one line.`,
+    });
+  },
+});
+
+export const openMerchant: AiTool = defineTool({
+  name: "open_merchant",
+  description:
+    "Open a merchant's overview sheet for the user (brand, hours, delivery ETA, featured items, events, take-me-there). Use when the user asks about one place or says \"show me\". Use a merchant id returned in this turn.",
+  schema: openMerchantSchema,
+  execute: async (input, ctx) => {
+    const pinned = scopedMerchantId(ctx);
+    if (pinned && input.merchantId !== pinned) return errorResult("Only this merchant can be opened here.");
+    const merchant = await ctx.ds.getMerchant(input.merchantId);
+    if (!merchant) return errorResult(`Unknown merchant id "${input.merchantId}". Use ids from search results.`);
+    const geo = await geoFor(ctx);
+    const card = toMerchantCard(merchant, ctx.now);
+    ctx.emit({ type: "cards", merchants: [card] });
+    ctx.emit({ type: "action", action: { type: "open_merchant", merchantId: merchant.id } });
+    return JSON.stringify({
+      ok: true,
+      merchant: { ...card, district: geo.districtByMerchant.get(merchant.id)?.name ?? null },
+      note: "The merchant sheet is open for the user. Keep your reply to one or two lines.",
+    });
+  },
+});
+
+export const openProduct: AiTool = defineTool({
+  name: "open_product",
+  description:
+    "Open one product's sign for the user (image, price, variants, add to cart). Use when a single item is the answer, e.g. the one hoodie that fits. Returns its live facts, including availability; if purchasableNow is false, say when it drops instead of offering to add it. Use a product id returned in this turn.",
+  schema: openProductSchema,
+  execute: async (input, ctx) => {
+    const pinned = scopedMerchantId(ctx);
+    const product = await ctx.ds.getProduct(input.productId);
+    if (!product) return errorResult(`Unknown product id "${input.productId}". Use ids from search results.`);
+    if (pinned && product.merchantId !== pinned) return errorResult("Not sold by this merchant.");
+    const geo = await geoFor(ctx);
+    const fact = toProductFact(product, geo.merchantById.get(product.merchantId), geo.offers, ctx.now, geo.timezone);
+    ctx.emit({ type: "cards", products: [toProductCard(fact)] });
+    ctx.emit({ type: "action", action: { type: "open_product", productId: product.id } });
+    return compactJson({
+      ok: true,
+      product: fact,
+      note: fact.purchasableNow
+        ? "The product sign is open for the user; they can add it from there."
+        : "The product sign is open, but this item cannot be bought yet. Relay availabilityNote and offer something purchasable now.",
+    });
+  },
+});
+
 /** Deterministic order matters for prompt caching: never reorder or filter per request. */
 export const conciergeTools: AiTool[] = [
   searchMerchants,
   searchProducts,
   getMerchant,
   getEvents,
+  recommend,
+  highlightStorefront,
+  openMerchant,
+  openProduct,
   navigate,
   proposeCart,
 ];
@@ -969,6 +1172,7 @@ export const employeeTools: AiTool[] = [
   recommendItems,
   searchProducts,
   getMerchant,
+  openProduct,
   proposeCart,
   escalateToHuman,
 ];

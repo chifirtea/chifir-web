@@ -31,9 +31,12 @@ export function employeeSuggestions(merchant: Merchant): string[] {
 /**
  * Talking to a merchant's AI employee. Bound to `worldStore.talkingToMerchantId`. The greeting is
  * local (from the public employee config); everything else streams from `/api/ai/employee`.
+ * While a product sign is open (the employee's `open_product`, or "Look" on a card) the panel
+ * slides away but stays mounted, so the conversation is still there when the sign closes.
  */
 export function EmployeePanel() {
   const merchantId = useWorldStore((s) => s.talkingToMerchantId);
+  const yielded = useWorldStore((s) => s.focusedProductId !== null);
   const setTalkingTo = useWorldStore((s) => s.setTalkingTo);
   const index = useCityStore((s) => s.index);
   const isPhone = useIsPhone();
@@ -42,7 +45,7 @@ export function EmployeePanel() {
 
   return (
     <Drawer
-      open={merchantId !== null}
+      open={merchantId !== null && !yielded}
       onClose={() => setTalkingTo(null)}
       side={isPhone ? "bottom" : "right"}
       width="min(460px, 100vw)"
@@ -109,7 +112,7 @@ function EmployeeChat({ merchant, employee }: { merchant: Merchant; employee: Ai
         />
       ) : (
         <div className="scroll-thin min-h-0 flex-1 overflow-y-auto px-5 py-2">
-          <ProductList merchantId={merchant.id} onSelect={(productId) => inspectProduct(productId, "ai")} />
+          <ProductList merchantId={merchant.id} onSelect={(productId) => inspectProduct(productId, "panel")} />
         </div>
       )}
     </div>

@@ -51,8 +51,27 @@ function textScore(haystack: string, query: string | undefined): number {
   return score;
 }
 
+/**
+ * Popularity = rating weighted by how many people it rests on (log scale), so a 4.6 with a
+ * thousand reviews outranks a 4.9 with twelve. Unrated merchants score 0.
+ */
+export function popularityScore(m: Pick<Merchant, "rating" | "ratingCount">): number {
+  if (m.rating === undefined) return 0;
+  return m.rating * Math.log(Math.max(0, m.ratingCount) + 1);
+}
+
+function comparePopular(a: Merchant, b: Merchant): number {
+  return (
+    popularityScore(b) - popularityScore(a) ||
+    Number(b.sponsored) - Number(a.sponsored) ||
+    (b.rating ?? 0) - (a.rating ?? 0) ||
+    a.name.localeCompare(b.name)
+  );
+}
+
 export function filterMerchants(merchants: Merchant[], parcels: Parcel[], params: MerchantSearchParams): Merchant[] {
   const parcelByMerchant = new Map(parcels.filter((p) => p.merchantId).map((p) => [p.merchantId!, p]));
+  const popular = params.sort === "popular";
   const scored = merchants
     .filter((m) => !params.merchantType || m.merchantType === params.merchantType)
     .filter((m) => !params.category || m.category === params.category || m.category.startsWith(`${params.category}.`))
@@ -65,7 +84,9 @@ export function filterMerchants(merchants: Merchant[], parcels: Parcel[], params
       score: textScore(`${m.name} ${m.tagline ?? ""} ${m.category} ${m.tags.join(" ")} ${m.description}`, params.query),
     }))
     .filter((x) => !params.query || x.score > 0)
-    .sort((a, b) => b.score - a.score || (b.m.rating ?? 0) - (a.m.rating ?? 0));
+    .sort((a, b) =>
+      popular ? comparePopular(a.m, b.m) : b.score - a.score || (b.m.rating ?? 0) - (a.m.rating ?? 0),
+    );
   return scored.slice(0, params.limit ?? 20).map((x) => x.m);
 }
 

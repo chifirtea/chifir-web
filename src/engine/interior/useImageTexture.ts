@@ -2,11 +2,15 @@
 
 import { useEffect, useState } from "react";
 import * as THREE from "three";
+import { useQualityStore } from "@/engine/canvas/qualityStore";
+import { isTextureUrl, resolveImage, textureImageWidth } from "@/lib/media/images";
 
 /**
  * Loads an external (untrusted) image URL as a texture with a branded fallback. Never throws and
  * never suspends: the fallback renders immediately and the real image swaps in when it arrives.
- * Loads are shared across every mesh that asks for the same URL.
+ * URLs go through the image pipeline (`resolveImage`) so a CDN prefix or optimizer applies to
+ * textures exactly as it does to `<img>`; the requested width follows the quality tier. Loads are
+ * shared across every mesh that asks for the same resolved URL.
  */
 
 type Listener = (texture: THREE.Texture | null) => void;
@@ -23,6 +27,8 @@ let loader: THREE.TextureLoader | null = null;
 function getLoader(): THREE.TextureLoader {
   if (!loader) {
     loader = new THREE.TextureLoader();
+    // Merchant imagery lives on other origins; without CORS headers the browser taints the
+    // canvas and WebGL refuses the upload, so the host must allow it (docs/MEDIA.md).
     loader.setCrossOrigin("anonymous");
   }
   return loader;
@@ -37,7 +43,7 @@ function prepare(texture: THREE.Texture): THREE.Texture {
   return texture;
 }
 
-/** Subscribes to a URL's texture; the callback fires once with the texture or null on failure. */
+/** Subscribes to a resolved URL's texture; the callback fires once with the texture or null on failure. */
 export function loadImageTexture(url: string, listener: Listener): () => void {
   let entry = entries.get(url);
   if (entry && entry.status !== "loading") {
@@ -54,7 +60,7 @@ export function loadImageTexture(url: string, listener: Listener): () => void {
       for (const l of current.listeners) l(texture);
       current.listeners.clear();
     };
-    if (typeof window === "undefined" || !/^https?:\/\//i.test(url)) {
+    if (typeof window === "undefined" || !isTextureUrl(url)) {
       settle(null);
     } else {
       try {
@@ -76,27 +82,35 @@ export function loadImageTexture(url: string, listener: Listener): () => void {
   };
 }
 
+/** The URL a texture will actually be fetched from for the current quality tier ("" when none). */
+export function textureUrlFor(url: string | undefined, maxTextureSize: number): string {
+  if (!url) return "";
+  return resolveImage(url, { width: textureImageWidth(maxTextureSize), quality: 80 });
+}
+
 /** The image as a texture once loaded; `fallback` until then and forever after a failure. */
 export function useImageTexture(url: string | undefined, fallback: THREE.Texture): THREE.Texture {
+  const maxTex = useQualityStore((s) => s.settings.maxTextureSize);
+  const resolved = textureUrlFor(url, maxTex);
   // State is keyed by the url it was loaded for, so a url change never shows a stale texture and
   // never needs a synchronous reset inside the effect.
   const [loaded, setLoaded] = useState<{ url: string; texture: THREE.Texture | null }>(() => ({
-    url: url ?? "",
-    texture: url ? (entries.get(url)?.texture ?? null) : null,
+    url: resolved,
+    texture: resolved ? (entries.get(resolved)?.texture ?? null) : null,
   }));
 
   useEffect(() => {
-    if (!url) return;
+    if (!resolved) return;
     let active = true;
-    const unsubscribe = loadImageTexture(url, (texture) => {
-      if (active) setLoaded({ url, texture });
+    const unsubscribe = loadImageTexture(resolved, (texture) => {
+      if (active) setLoaded({ url: resolved, texture });
     });
     return () => {
       active = false;
       unsubscribe();
     };
-  }, [url]);
+  }, [resolved]);
 
-  const current = url && loaded.url === url ? loaded.texture : url ? (entries.get(url)?.texture ?? null) : null;
+  const current = resolved && loaded.url === resolved ? loaded.texture : resolved ? (entries.get(resolved)?.texture ?? null) : null;
   return current ?? fallback;
 }

@@ -136,6 +136,32 @@ export function talkToEmployee(merchantId: string): boolean {
   return true;
 }
 
+/** Opens a merchant's overview sheet (brand, hours, featured items, take-me-there). */
+export function openMerchantPanel(merchantId: string): boolean {
+  const index = getCityIndex();
+  if (!index?.merchantsById[merchantId]) return false;
+  useWorldStore.getState().setMerchantPanel(merchantId);
+  return true;
+}
+
+/**
+ * Lights up a parcel's door in-world (ring + beacon, see HighlightLayer). Only parcels occupied
+ * right now can be highlighted; `null` clears. Returns whether the highlight is showing.
+ */
+export function highlightParcel(parcelId: string | null, source: "ai" | "party" | "hud"): boolean {
+  const world = useWorldStore.getState();
+  if (parcelId === null) {
+    world.setHighlightedParcel(null);
+    return false;
+  }
+  const index = getCityIndex();
+  const parcel = index?.parcelsById[parcelId];
+  if (!index || !parcel || !index.occupiedParcels.some((p) => p.id === parcel.id)) return false;
+  world.setHighlightedParcel(parcel.id);
+  if (source !== "ai") track("waypoint_set", { targetKind: "parcel", source: "hud" });
+  return true;
+}
+
 /** Executes a hotspot the player activated (E key / tap). */
 export function interactWithHotspot(hotspot: Hotspot): boolean {
   switch (hotspot.kind) {
@@ -221,6 +247,28 @@ export function executeAIAction(action: AIAction): boolean {
     case "escalate":
       accepted = true;
       break;
+    case "highlight_storefront": {
+      const index = getCityIndex();
+      const parcelId = action.parcelId ?? index?.parcelByMerchant[action.merchantId]?.id;
+      accepted = parcelId ? highlightParcel(parcelId, "ai") : false;
+      break;
+    }
+    case "open_merchant":
+      accepted = openMerchantPanel(action.merchantId);
+      break;
+    case "open_product":
+      accepted = inspectProduct(action.productId, "ai");
+      break;
+    case "recommend": {
+      // Cards already rendered; "executing" only confirms the ids are real so the chip can show.
+      const index = getCityIndex();
+      accepted = Boolean(
+        index &&
+          (action.productIds.some((id) => index.productsById[id]) ||
+            action.merchantIds.some((id) => index.merchantsById[id])),
+      );
+      break;
+    }
   }
   track("ai_action_executed", { action: action.type, accepted });
   return accepted;

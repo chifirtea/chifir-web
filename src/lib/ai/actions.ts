@@ -11,7 +11,33 @@ export type AIAction =
       items: Array<{ productId: Id; quantity: number; variantSelection?: Record<string, string> }>;
       note?: string;
     }
-  | { type: "escalate"; merchantId: Id; reason: string };
+  | { type: "escalate"; merchantId: Id; reason: string }
+  /** Pulse a ring + beacon at the merchant's door. `parcelId` is the storefront the server resolved. */
+  | { type: "highlight_storefront"; merchantId: Id; parcelId?: Id; label: string; reason?: string }
+  /** Open the merchant overview sheet. */
+  | { type: "open_merchant"; merchantId: Id }
+  /** Open the product sign. */
+  | { type: "open_product"; productId: Id }
+  /** Ids the AI recommends (cards travel separately); the client only validates and labels them. */
+  | { type: "recommend"; productIds: Id[]; merchantIds: Id[]; reason?: string };
+
+export type AIActionType = AIAction["type"];
+
+/**
+ * Client policy: which actions run the moment they arrive. Teleports keep a one-tap confirm chip
+ * (the user decides when the world moves); everything else is a panel, a highlight or cart math
+ * that the server already validated.
+ */
+export function autoExecutes(action: AIAction): boolean {
+  switch (action.type) {
+    case "navigate":
+      return action.mode === "guide";
+    case "escalate":
+      return false;
+    default:
+      return true;
+  }
+}
 
 export type ChatScope = "concierge" | "employee";
 
