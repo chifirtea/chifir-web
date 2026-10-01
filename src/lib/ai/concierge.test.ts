@@ -123,7 +123,8 @@ describe("runConcierge with a scripted provider", () => {
     expect(cards.length).toBeGreaterThanOrEqual(2);
     expect(cards[0]?.products?.map((p) => p.id)).toEqual(expect.arrayContaining([HELLFIRE, VINDALOO]));
     expect(actions.map((a) => a.type)).toEqual(["recommend", "highlight_storefront", "navigate"]);
-    expect(actions[1]).toEqual({ type: "highlight_storefront", merchantId: SAFFRON, parcelId: sid.parcel("fs-n2"), label: "Saffron Alley", reason: "Heat 4 of 4" });
+    const saffronParcel = snapshot.parcels.find((p) => p.merchantId === SAFFRON && p.tier !== "billboard")!.id;
+    expect(actions[1]).toEqual({ type: "highlight_storefront", merchantId: SAFFRON, parcelId: saffronParcel, label: "Saffron Alley", reason: "Heat 4 of 4" });
     expect(actions[2]).toMatchObject({ type: "navigate", mode: "teleport", target: { kind: "merchant", merchantId: SAFFRON } });
     expect(text).toContain("$15");
     expect(events.at(-1)).toEqual({ type: "done" });

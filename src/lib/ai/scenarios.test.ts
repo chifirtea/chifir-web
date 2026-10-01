@@ -72,7 +72,10 @@ describe("scenario 1: spicy food under $25", () => {
     const res = await searchProducts.execute({ minSpiceLevel: 2, maxPriceCents: 2500 }, ctx);
     const body = parse<ProductsBody>(res.content);
     const ids = body.products.map((p) => p.id);
+    // Every matching product survives compaction (11 in the seed): prose is dropped before entities.
+    expect(body.count).toBe(11);
     expect(ids).toEqual(expect.arrayContaining([HELLFIRE, VINDALOO, SPICY_MISO]));
+    expect(res.content.length).toBeLessThanOrEqual(6000);
     for (const p of body.products) {
       expect(p.priceCents).toBeLessThanOrEqual(2500);
       expect(p.spiceLevel ?? 0).toBeGreaterThanOrEqual(2);
@@ -119,7 +122,8 @@ describe("scenario 2: two people, $60, something healthy", () => {
     const [a, b] = verde;
     expect(a!.priceCents + b!.priceCents).toBeLessThanOrEqual(6000);
     expect((a!.serves ?? 0) + (b!.serves ?? 0)).toBeGreaterThanOrEqual(2);
-    for (const p of verde) expect(p.dietary?.length ?? 0).toBeGreaterThan(0);
+    // Labelled bowls lead; "Build Your Own" has no dietary tags until you pick a base.
+    expect(verde.filter((p) => p.dietary?.length).length).toBeGreaterThanOrEqual(2);
   });
 
   it("recommend returns the picks' facts, emits cards and a recommend action, and lists unknown ids", async () => {

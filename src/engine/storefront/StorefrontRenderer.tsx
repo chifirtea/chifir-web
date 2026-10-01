@@ -75,11 +75,11 @@ export function StorefrontRenderer() {
     if (!layout) return;
     setColliders("street", [
       ...entries.flatMap((e) => e.def.colliders(e.parcel)),
-      ...lots.flatMap((p) => availableLotColliders(p)),
+      ...lots.flatMap((p) => availableLotColliders(p, index?.eventByParcel[p.id])),
       ...layout.environmentColliders,
     ]);
     return () => clearColliders("street");
-  }, [entries, lots, layout, setColliders, clearColliders]);
+  }, [entries, lots, layout, index, setColliders, clearColliders]);
 
   // Hotspots: a door per merchant, an info point per lot, an event point per venue with a show.
   useEffect(() => {
@@ -119,7 +119,11 @@ export function StorefrontRenderer() {
         }
       }
     }
-    for (const parcel of lots) hotspots.push(availableLotHotspot(parcel));
+    for (const parcel of lots) {
+      const event = index.eventByParcel[parcel.id];
+      const merchant = event?.merchantId ? index.merchantsById[event.merchantId] : undefined;
+      hotspots.push(availableLotHotspot(parcel, event, merchant));
+    }
     setHotspots("street", hotspots);
     return () => clearHotspots("street");
   }, [index, entries, lots, setHotspots, clearHotspots]);

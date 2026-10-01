@@ -454,11 +454,16 @@ function hoursToday(
   return { day, intervals: hours.weekly[day] ?? [] };
 }
 
+/** Fields of list entries that go before any entity does: prose and metadata, never ids, prices or availability. */
+const DROPPABLE_ENTRY_KEYS = ["leadTime", "tags", "description", "category"] as const;
+
 /**
  * Serializes a tool result and shrinks it below the character cap without ever producing invalid
- * JSON: image urls go first, then descriptions are shortened, then the largest shallow list is
- * trimmed from the end (marking its parent `truncated: true`). Returns the compacted value too so
- * callers emit cards for exactly what the model can see.
+ * JSON: image urls go first, then descriptions are shortened, then prose/metadata fields are
+ * dropped from list entries, and only then is the largest shallow list trimmed from the end
+ * (marking its parent `truncated: true`). Eleven real products without descriptions beat eight
+ * with them: the model must see every true answer. Returns the compacted value too so callers
+ * emit cards for exactly what the model can see.
  */
 export function compactValue<T>(
   value: T,
@@ -470,6 +475,7 @@ export function compactValue<T>(
     (v) => shrinkStrings(v, 200, true),
     (v) => shrinkStrings(v, 100, true),
     (v) => shrinkStrings(v, 60, true),
+    ...DROPPABLE_ENTRY_KEYS.map((key) => (v: unknown) => dropKeyInListEntries(v, key)),
   ];
   for (const stage of stages) {
     if (json.length <= maxChars) break;
@@ -501,6 +507,20 @@ function shrinkStrings(value: unknown, descLen: number, dropImages: boolean): un
       if (dropImages && k === "imageUrl") continue;
       if (k === "description" && typeof v === "string") out[k] = trimText(v, descLen);
       else out[k] = shrinkStrings(v, descLen, dropImages);
+    }
+    return out;
+  }
+  return value;
+}
+
+/** Removes `key` from the objects that are direct elements of any array (not from nested objects or the root). */
+function dropKeyInListEntries(value: unknown, key: string, inList = false): unknown {
+  if (Array.isArray(value)) return value.map((v) => dropKeyInListEntries(v, key, true));
+  if (value && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      if (inList && k === key) continue;
+      out[k] = dropKeyInListEntries(v, key, false);
     }
     return out;
   }

@@ -89,7 +89,7 @@ function brickTexture(base: string, size: number): THREE.CanvasTexture | null {
   });
 }
 
-function plasterTexture(base: string, size: number): THREE.CanvasTexture | null {
+export function plasterTexture(base: string, size: number): THREE.CanvasTexture | null {
   return patternTexture(`plaster|${base}|${size}`, size, (ctx, s) => {
     ctx.fillStyle = base;
     ctx.fillRect(0, 0, s, s);
