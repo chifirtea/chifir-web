@@ -23,15 +23,16 @@ export function PerfProbe({ gpu }: { gpu?: string | undefined }) {
 
   // Priority -1: after the player (-20) and camera (-10) but still *before* the render. A positive
   // priority would make R3F stop rendering automatically ("manual frameloop"), so never use one here.
-  useFrame(({ clock }) => {
-    const t = clock.elapsedTime * 1000;
+  useFrame(() => {
+    // Stamps share the HUD's time base (performance.now), so "last second" windows line up.
+    const t = performance.now();
     if (last.current > 0) {
       frameStats.push(t - last.current, t);
       mark("city:first-frame");
     }
     last.current = t;
-    if (clock.elapsedTime - lastCounterAt.current > COUNTER_INTERVAL_S) {
-      lastCounterAt.current = clock.elapsedTime;
+    if (t - lastCounterAt.current > COUNTER_INTERVAL_S * 1000) {
+      lastCounterAt.current = t;
       const info = gl.info;
       renderCounters.current = {
         drawCalls: info.render.calls,
