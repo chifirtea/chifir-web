@@ -2,6 +2,7 @@ import { features } from "@/lib/env.server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { getDataSource } from "@/lib/data";
 import { runEmployee } from "@/lib/ai/employee";
+import { requestNow } from "@/lib/time/serverClock";
 import { aiRateLimiter, rateLimitKeyFor } from "@/lib/ai/rateLimit";
 import { sseResponse } from "@/lib/ai/sse";
 import { chatRequestSchema } from "@/lib/validation/ai";
@@ -46,7 +47,7 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
   return sseResponse(
-    (emit, signal) => runEmployee({ request: parsed.data, merchant, employee, user, emit, signal, ds }),
+    (emit, signal) => runEmployee({ request: parsed.data, merchant, employee, user, emit, signal, ds, now: requestNow(request) }),
     { signal: request.signal },
   );
 }

@@ -1,6 +1,7 @@
 import { features } from "@/lib/env.server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { runConcierge } from "@/lib/ai/concierge";
+import { requestNow } from "@/lib/time/serverClock";
 import { aiRateLimiter, rateLimitKeyFor } from "@/lib/ai/rateLimit";
 import { sseResponse } from "@/lib/ai/sse";
 import { chatRequestSchema } from "@/lib/validation/ai";
@@ -35,5 +36,5 @@ export async function POST(request: Request): Promise<Response> {
       { "Retry-After": String(limit.retryAfterSeconds) },
     );
   }
-  return sseResponse((emit, signal) => runConcierge({ request: parsed.data, user, emit, signal }), { signal: request.signal });
+  return sseResponse((emit, signal) => runConcierge({ request: parsed.data, user, emit, signal, now: requestNow(request) }), { signal: request.signal });
 }
