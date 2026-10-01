@@ -1,0 +1,108 @@
+@import "tailwindcss";
+
+/*
+  Design tokens. The city is a night-time place with warm street light; the UI reads as
+  physical signage layered over the world, not a SaaS dashboard.
+*/
+@theme {
+  --color-night: #0f1116;
+  --color-ink: #1a1d24;
+  --color-ink-2: #242832;
+  --color-line: rgba(233, 230, 223, 0.12);
+  --color-fog: #e9e6df;
+  --color-fog-2: rgba(233, 230, 223, 0.68);
+  --color-fog-3: rgba(233, 230, 223, 0.42);
+  --color-signal: #ff5a36;
+  --color-signal-deep: #d9401f;
+  --color-sodium: #ffc46b;
+  --color-sky: #7da7ff;
+  --color-mint: #7fe0c1;
+  --color-danger: #ff6b6b;
+
+  --font-display: var(--font-display), "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-body), "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
+
+  --radius-sign: 14px;
+  --shadow-sign: 0 12px 40px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --shadow-glow-signal: 0 0 0 1px rgba(255, 90, 54, 0.4), 0 10px 30px rgba(255, 90, 54, 0.35);
+}
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  height: 100%;
+  background: var(--color-night);
+  color: var(--color-fog);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  overscroll-behavior: none;
+}
+
+.font-display {
+  font-family: var(--font-display);
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Physical-sign surface used for HUD panels, drawers and cards. */
+.sign {
+  background: color-mix(in oklab, var(--color-ink) 92%, black);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sign);
+  box-shadow: var(--shadow-sign);
+  backdrop-filter: blur(14px);
+}
+
+.eyebrow {
+  font-family: var(--font-display);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--color-fog-3);
+}
+
+/* "GET IT IRL" stamp */
+.stamp {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-signal);
+  border: 1.5px solid currentColor;
+  border-radius: 4px;
+  padding: 3px 7px;
+  transform: rotate(-2deg);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-sodium);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Scrollbars inside panels */
+.scroll-thin {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(233, 230, 223, 0.2) transparent;
+}
