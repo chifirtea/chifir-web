@@ -29,10 +29,10 @@ export function ProductTable({ proposal, extraction, onChange }: { proposal: Pro
       aside={
         products.length ? (
           <div className="flex gap-1">
-            <button type="button" className="min-h-9 rounded-lg px-2 text-[12px] text-fog-2 hover:bg-white/5 hover:text-fog" onClick={() => setAll(true)}>
+            <button type="button" className="min-h-11 rounded-lg px-2 text-[12px] text-fog-2 hover:bg-white/5 hover:text-fog sm:min-h-9" onClick={() => setAll(true)}>
               Include all
             </button>
-            <button type="button" className="min-h-9 rounded-lg px-2 text-[12px] text-fog-2 hover:bg-white/5 hover:text-fog" onClick={() => setAll(false)}>
+            <button type="button" className="min-h-11 rounded-lg px-2 text-[12px] text-fog-2 hover:bg-white/5 hover:text-fog sm:min-h-9" onClick={() => setAll(false)}>
               Exclude all
             </button>
           </div>

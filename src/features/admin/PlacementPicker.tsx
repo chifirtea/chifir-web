@@ -97,7 +97,7 @@ export function PlacementPicker({
               </ul>
             )}
             {placement ? (
-              <button type="button" className="self-start text-[12px] text-fog-3 underline-offset-2 hover:text-fog hover:underline" onClick={() => onChange(null)}>
+              <button type="button" className="inline-flex min-h-11 items-center self-start text-[12px] text-fog-3 underline-offset-2 hover:text-fog hover:underline sm:min-h-0" onClick={() => onChange(null)}>
                 Clear placement
               </button>
             ) : null}
