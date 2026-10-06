@@ -304,7 +304,6 @@ export async function completeOrder(
   ds: DataSource = getDataSource(),
   now: Date = new Date(),
 ): Promise<Order> {
-
   for (const offerId of distinct(order.items.map((i) => i.offerId))) {
     const counted = await ds.redeemOffer(offerId);
     if (!counted)
@@ -344,27 +343,47 @@ export async function completeOrder(
   };
   const records: AnalyticsRecord[] = [record];
   const paidAt = order.paidAt ? Date.parse(order.paidAt) : now.getTime();
+  const attribution = {
+    ts: Date.now(),
+    sessionId: order.sessionId ?? "server",
+    anonymousId: order.anonymousId ?? "server",
+    ...(order.userId ? { userId: order.userId } : {}),
+  };
   for (const eventId of distinct(order.items.map((i) => i.eventId))) {
     const event = await ds.getEvent(eventId, { now: new Date(paidAt) });
-    if (!event || event.kind !== "launch") continue;
+    if (!event) continue;
     const items = order.items.filter((i) => i.eventId === eventId);
-    records.push({
-      name: "drop_purchased",
-      props: {
-        eventId,
-        orderId: order.id,
-        productIds: distinct(items.map((i) => i.productId)),
-        totalCents: items.reduce(
-          (sum, i) => sum + i.unitPriceCents * i.quantity - i.discountCents,
-          0,
-        ),
-        live: isEventLive(event, paidAt),
-      },
-      ts: Date.now(),
-      sessionId: order.sessionId ?? "server",
-      anonymousId: order.anonymousId ?? "server",
-      ...(order.userId ? { userId: order.userId } : {}),
-    });
+    if (event.kind === "launch") {
+      records.push({
+        name: "drop_purchased",
+        props: {
+          eventId,
+          orderId: order.id,
+          productIds: distinct(items.map((i) => i.productId)),
+          totalCents: items.reduce(
+            (sum, i) => sum + i.unitPriceCents * i.quantity - i.discountCents,
+            0,
+          ),
+          live: isEventLive(event, paidAt),
+        },
+        ...attribution,
+      });
+      // The launch offer applied: the buyer took part in the drop's promotion.
+      if (items.some((i) => i.discountCents > 0)) {
+        records.push({
+          name: "event_participated",
+          props: { eventId, kind: "offer_redeemed" },
+          ...attribution,
+        });
+      }
+    } else {
+      // A ticket or other event product (a concert's general admission): participation.
+      records.push({
+        name: "event_participated",
+        props: { eventId, kind: "ticket_purchased" },
+        ...attribution,
+      });
+    }
   }
   await ds.recordAnalytics(records);
 

@@ -39,7 +39,7 @@ The milestone brief names events in UPPER_CASE; the catalog uses snake_case. Map
 | — | `party_left`, `presence_joined` | Party HUD / presence layer | `seconds`; `room`, `peers`, `transport` |
 | EVENT_VIEWED | `event_viewed` | Event HUD, Places panel, hotspot, AI | `eventId`, `phase`, `source` |
 | EVENT_JOINED | `event_joined` | Arriving at the event parcel or entering its pop-up | `eventId`, `phase`, `via` |
-| — | `event_participated` | Ticket purchase / offer redemption | `eventId`, `kind` |
+| — | `event_participated` (server) | `completeOrder()`: a ticket or other product of a non-launch event (`ticket_purchased`), or launch items bought with the launch offer applied (`offer_redeemed`) | `eventId`, `kind` |
 | — | `perf_sample` | usePerfSampler (every 30 s while visible) | `fps`, `frameP95Ms`, `ttiMs`, `chunkMs`, `memoryMb`, `tier`, `dpr` |
 | — | `error_client`, `signup`, `login`, `session_heartbeat` | various | — |
 
