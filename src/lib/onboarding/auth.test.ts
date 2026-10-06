@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { adminGate, bearerToken, tokensMatch } from "./auth";
+import { adminGate, bearerToken, crossSiteProblem, tokensMatch } from "./auth";
 
 const TOKEN = "s3cret-admin-token-0123456789";
 
@@ -43,5 +43,29 @@ describe("adminGate", () => {
       expect(adminGate({ ...base, configuredToken: TOKEN, isProduction, cookie: TOKEN })).toBe("ok");
       expect(adminGate({ ...base, configuredToken: TOKEN, isProduction, authorization: "Bearer wrong-token-wrong-token", cookie: "nope" })).toBe("unauthorized");
     }
+  });
+});
+
+describe("crossSiteProblem (CSRF)", () => {
+  const post = { method: "POST", secFetchSite: null, origin: null, hosts: ["localhost:3100", null] };
+
+  it("lets reads through and refuses cross-site or same-site writes", () => {
+    expect(crossSiteProblem({ ...post, method: "GET", secFetchSite: "cross-site" })).toBeNull();
+    expect(crossSiteProblem({ ...post, secFetchSite: "same-origin" })).toBeNull();
+    expect(crossSiteProblem({ ...post, secFetchSite: "none" })).toBeNull();
+    expect(crossSiteProblem({ ...post, secFetchSite: "cross-site" })).toMatch(/refused/);
+    expect(crossSiteProblem({ ...post, secFetchSite: "same-site" })).toMatch(/refused/); // a sibling subdomain
+    expect(crossSiteProblem({ ...post, method: "PATCH", secFetchSite: "cross-site", origin: "http://localhost:3100" })).toMatch(/refused/);
+  });
+
+  it("falls back to Origin vs Host when Sec-Fetch-Site is missing", () => {
+    expect(crossSiteProblem({ ...post, origin: "http://localhost:3100" })).toBeNull();
+    expect(crossSiteProblem({ ...post, origin: "https://evil.example" })).toMatch(/refused/);
+    expect(crossSiteProblem({ ...post, origin: "null" })).toMatch(/refused/);
+    expect(crossSiteProblem({ ...post, origin: "https://app.chifir.com", hosts: ["internal:8080", "app.chifir.com"] })).toBeNull();
+  });
+
+  it("allows non-browser clients (no Sec-Fetch-Site, no Origin): a CSRF attack cannot send those", () => {
+    expect(crossSiteProblem(post)).toBeNull();
   });
 });

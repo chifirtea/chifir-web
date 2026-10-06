@@ -10,6 +10,7 @@ import type {
 import { formatCents } from "@/lib/utils/money";
 import { merchantProposalSchema, proposalProblems, PLATFORM_PROHIBITED_CLAIMS } from "@/lib/validation/merchantDraft";
 import { defaultTemplates, INTERIOR_RULES, placementProblem, STOREFRONT_RULES } from "@/lib/onboarding/placement";
+import { checkProductAgainstSource, type ProductSourceCheck } from "@/lib/onboarding/sourceCheck";
 import type { Extraction } from "@/lib/onboarding/types";
 
 /**
@@ -76,35 +77,38 @@ export function forApprovalProposal(proposal: Proposal): Proposal {
   return { ...proposal, products: proposal.products.filter((p) => p.active).map((p, i) => ({ ...p, sortOrder: i })) };
 }
 
-/** Every price the source listed (product base + each variant). */
-export function sourcePriceSet(extraction: Extraction): Set<number> {
-  const set = new Set<number>();
-  for (const p of extraction.products) {
-    set.add(p.priceCents);
-    for (const v of p.variants) set.add(v.priceCents);
-  }
-  return set;
-}
-
-export interface PriceCheck {
-  /** Base price as listed by the source for the same handle, when there is one. */
+export interface PriceCheck extends ProductSourceCheck {
+  /** Base price the source lists for this same product (matched by handle, else title). */
   sourceCents?: number;
-  /** The proposed price appears nowhere in the source catalog. */
+  /** The source's compare-at ("was") price at that base price, when it lists one. */
+  sourceCompareAtCents?: number;
+  /** A customer would pay something the source does not charge for this product. */
   notInSource: boolean;
 }
 
-export function priceCheck(product: ProposalProduct, extraction: Extraction, prices: Set<number>): PriceCheck {
-  const source = extraction.products.find((p) => p.handle === product.slug);
+/**
+ * The row check: prices against this product's own source prices (a price borrowed from another
+ * product is still flagged), option combinations against the source variants, "was" price,
+ * description and dietary/allergen claims against the source.
+ */
+export function priceCheck(product: ProposalProduct, extraction: Extraction): PriceCheck {
+  const check = checkProductAgainstSource(product, extraction);
+  const compare = check.source?.variants.find((v) => v.priceCents === check.source?.priceCents)?.compareAtPriceCents;
   return {
-    ...(source ? { sourceCents: source.priceCents } : {}),
-    notInSource: !prices.has(product.priceCents),
+    ...check,
+    ...(check.source ? { sourceCents: check.source.priceCents } : {}),
+    ...(compare !== undefined ? { sourceCompareAtCents: compare } : {}),
+    notInSource: check.price.length > 0,
   };
 }
 
 export interface ReviewChecklist {
   included: number;
   excluded: number;
+  /** Included products whose price, "was" price or option prices differ from their source product. */
   pricesNotInSource: string[];
+  /** Included products whose description, dietary, allergen or calorie claims the source does not make. */
+  claimsNotInSource: string[];
   placementChosen: boolean;
   templateProblem: string | null;
   interiorProblem: string | null;
@@ -117,14 +121,14 @@ export function reviewChecklist(
   extraction: Extraction,
   parcel: Pick<Parcel, "tier"> | undefined,
 ): ReviewChecklist {
-  const prices = sourcePriceSet(extraction);
-  const active = proposal.products.filter((p) => p.active);
+  const checked = proposal.products.map((p) => ({ p, check: priceCheck(p, extraction) })).filter(({ p }) => p.active);
   const m = proposal.merchant;
   const f = m.fulfillment;
   return {
-    included: active.length,
-    excluded: proposal.products.length - active.length,
-    pricesNotInSource: active.filter((p) => !prices.has(p.priceCents)).map((p) => p.title),
+    included: checked.length,
+    excluded: proposal.products.length - checked.length,
+    pricesNotInSource: checked.filter(({ check }) => check.price.length).map(({ p }) => p.title),
+    claimsNotInSource: checked.filter(({ check }) => check.claims.length).map(({ p }) => p.title),
     placementChosen: Boolean(parcel),
     templateProblem: parcel ? placementProblem(m.storefrontTemplate, m.merchantType, parcel) : null,
     interiorProblem: INTERIOR_RULES[m.interiorTemplate].suitableFor.includes(m.merchantType)
@@ -133,6 +137,11 @@ export function reviewChecklist(
     platformRulesKept: PLATFORM_PROHIBITED_CLAIMS.every((r) => proposal.employee.prohibitedClaims.includes(r)),
     noFulfillment: !(f.delivery?.enabled || f.pickup?.enabled || f.shipping?.enabled || f.booking?.enabled),
   };
+}
+
+/** The generator never sets sponsorship (a business decision); legacy drafts are cleaned on save. */
+export function withoutSponsorship(proposal: Proposal): Proposal {
+  return proposal.merchant.sponsored ? { ...proposal, merchant: { ...proposal.merchant, sponsored: false } } : proposal;
 }
 
 // ---------------------------------------------------------------------------------------------

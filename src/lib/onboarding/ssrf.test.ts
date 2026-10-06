@@ -98,11 +98,31 @@ describe("isPublicIp (IPv6)", () => {
     "2001:0:4136:e378:8000:63bf:3fff:fdd2", // Teredo
     "2002:0a00:0001::1", // 6to4 of 10.0.0.1
     "fe80::1%eth0", // zone ids are refused outright
+    "::ffff:0:a9fe:a9fe", // IPv4-translated 169.254.169.254
+    "::ffff:0:7f00:1", // IPv4-translated loopback
+    "::ffff:0:a00:1", // IPv4-translated 10.0.0.1
+    "64:ff9b:1::a9fe:a9fe", // local-use NAT64 (embedded address position varies): refused outright
+    "64:ff9b:1:ffff::808:808",
+    "::1:0:0:1", // rest of ::/8
+    "1::1", // outside 2000::/3
+    "4000::1",
+    "2001:2::1", // benchmarking
+    "2001:20::1", // ORCHIDv2
+    "3fff::1", // documentation 3fff::/20
   ])("rejects %s", (ip) => {
     expect(isPublicIp(ip)).toBe(false);
   });
 
-  it.each(["2606:4700:4700::1111", "2a00:1450:4001:82b::200e", "::ffff:8.8.8.8", "64:ff9b::808:808", "2002:0808:0808::1"])(
+  it.each([
+    "2606:4700:4700::1111",
+    "2a00:1450:4001:82b::200e",
+    "::ffff:8.8.8.8",
+    "::ffff:0:808:808", // IPv4-translated public address
+    "64:ff9b::808:808",
+    "2002:0808:0808::1",
+    "2001:4860:4860::8888",
+    "3fff:1000::1", // just past the 3fff::/20 documentation block
+  ])(
     "accepts %s",
     (ip) => {
       expect(isPublicIp(ip)).toBe(true);

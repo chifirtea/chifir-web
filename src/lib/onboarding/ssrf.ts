@@ -113,19 +113,19 @@ export function isPublicIPv6(g: readonly number[]): boolean {
   if (g.length !== 8) return false;
   const [g0, g1, g2, g3, g4, g5, g6, g7] = g as [number, number, number, number, number, number, number, number];
   const embedded = (hi: number, lo: number): [number, number, number, number] => [hi >> 8, hi & 0xff, lo >> 8, lo & 0xff];
-  const leadingZero = g0 === 0 && g1 === 0 && g2 === 0 && g3 === 0 && g4 === 0;
-  if (leadingZero && g5 === 0xffff) return isPublicIPv4(embedded(g6, g7)); // IPv4-mapped
-  if (leadingZero) return false; // ::, ::1, IPv4-compatible (deprecated)
+  const zeroPrefix = g0 === 0 && g1 === 0 && g2 === 0 && g3 === 0;
+  if (zeroPrefix && g4 === 0 && g5 === 0xffff) return isPublicIPv4(embedded(g6, g7)); // IPv4-mapped ::ffff:0:0/96
+  if (zeroPrefix && g4 === 0xffff && g5 === 0) return isPublicIPv4(embedded(g6, g7)); // IPv4-translated ::ffff:0:0:0/96
   if (g0 === 0x0064 && g1 === 0xff9b && g2 === 0 && g3 === 0 && g4 === 0 && g5 === 0) {
-    return isPublicIPv4(embedded(g6, g7)); // NAT64 well-known prefix
+    return isPublicIPv4(embedded(g6, g7)); // NAT64 well-known prefix 64:ff9b::/96
   }
-  if (g0 === 0x0100 && g1 === 0 && g2 === 0 && g3 === 0) return false; // discard-only 100::/64
-  if ((g0 & 0xfe00) === 0xfc00) return false; // unique local fc00::/7
-  if ((g0 & 0xffc0) === 0xfe80) return false; // link-local
-  if ((g0 & 0xffc0) === 0xfec0) return false; // site-local (deprecated)
-  if ((g0 & 0xff00) === 0xff00) return false; // multicast
-  if (g0 === 0x2001 && g1 === 0x0db8) return false; // documentation
-  if (g0 === 0x2001 && g1 === 0) return false; // Teredo tunnels (obfuscated inner address)
+  if (g0 === 0x0064 && g1 === 0xff9b && g2 === 0x0001) return false; // local-use NAT64 64:ff9b:1::/48 (operator networks)
+  // Everything else outside global unicast 2000::/3 is special: ::/8 (incl. ::, ::1,
+  // IPv4-compatible), 100::/64 discard, fc00::/7 ULA, fe80::/10 link-local, fec0::/10, ff00::/8.
+  if ((g0 & 0xe000) !== 0x2000) return false;
+  if (g0 === 0x2001 && g1 < 0x0200) return false; // IETF protocol assignments 2001::/23 (Teredo, benchmarking, ORCHID…)
+  if (g0 === 0x2001 && g1 === 0x0db8) return false; // documentation 2001:db8::/32
+  if (g0 === 0x3fff && g1 < 0x1000) return false; // documentation 3fff::/20
   if (g0 === 0x2002) return isPublicIPv4(embedded(g1, g2)); // 6to4
   return true;
 }

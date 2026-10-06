@@ -124,7 +124,7 @@ function DraftList({
       <div className="flex items-center justify-between gap-2">
         <p className="eyebrow">Drafts {drafts ? `(${drafts.length})` : ""}</p>
         <div className="flex gap-1">
-          <Button variant="ghost" size="sm" className="h-11 sm:h-9" leading={<RefreshCw className="h-3.5 w-3.5" />} onClick={onRefresh} aria-label="Refresh drafts">
+          <Button variant="ghost" size="sm" className="h-11 min-w-11 sm:h-9 sm:min-w-0" leading={<RefreshCw className="h-3.5 w-3.5" />} onClick={onRefresh} aria-label="Refresh drafts">
             <span className="hidden sm:inline">Refresh</span>
           </Button>
           <Button variant={selectedId ? "secondary" : "ghost"} size="sm" className="h-11 sm:h-9" leading={<Plus className="h-3.5 w-3.5" />} onClick={() => onSelect(undefined)} data-testid="new-extraction">

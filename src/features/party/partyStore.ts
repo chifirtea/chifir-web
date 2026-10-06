@@ -12,14 +12,28 @@ interface Persisted {
   joinedAt: number;
 }
 
+export interface JoinOffer {
+  code: string;
+  memberId: string;
+  name: string;
+}
+
 export interface PartyState {
   /** The party we are in, or null. Mirrored into the presence identity so packets carry it. */
   code: string | null;
   joinedAt: number | null;
   /** True once sessionStorage has been read (avoids a server/client mismatch on first paint). */
   hydrated: boolean;
-  /** A `?party=` code waiting for the city to be ready so the joiner can be placed. */
+  /**
+   * A `?party=` code whose joiner has not been placed yet: set on load, cleared once the join is
+   * reported (placed next to a member, offer answered, or given up after `LATE_JOIN_MS`).
+   */
   pendingJoin: string | null;
+  /**
+   * A member turned up after the joiner had started walking around: a one-tap "Go to" toast
+   * instead of pulling them away mid-step.
+   */
+  joinOffer: JoinOffer | null;
 
   hydrate: () => void;
   /** Creates a party or returns the current one. */
@@ -28,6 +42,9 @@ export interface PartyState {
   join: (raw: string) => boolean;
   leave: () => void;
   setPendingJoin: (code: string | null) => void;
+  setJoinOffer: (offer: JoinOffer | null) => void;
+  /** Reports the pending link join (`party_joined`, once) and clears it and any offer. */
+  resolveJoin: (spawnedNearInviter: boolean) => void;
 }
 
 function readPersisted(): Persisted | null {
@@ -67,6 +84,7 @@ export const usePartyStore = create<PartyState>((set, get) => ({
   joinedAt: null,
   hydrated: false,
   pendingJoin: null,
+  joinOffer: null,
 
   hydrate: () => {
     if (get().hydrated) return;
@@ -90,9 +108,17 @@ export const usePartyStore = create<PartyState>((set, get) => ({
   leave: () => {
     const { code, joinedAt } = get();
     if (!code) return;
+    get().resolveJoin(false);
     track("party_left", { partyCode: code, seconds: joinedAt ? Math.round((Date.now() - joinedAt) / 1000) : 0 });
     apply(set, null, null);
-    set({ pendingJoin: null });
   },
   setPendingJoin: (pendingJoin) => set({ pendingJoin }),
+  setJoinOffer: (joinOffer) => set({ joinOffer }),
+  resolveJoin: (spawnedNearInviter) => {
+    const partyCode = get().pendingJoin;
+    if (!partyCode) return;
+    set({ pendingJoin: null, joinOffer: null });
+    const members = Object.keys(usePresenceStore.getState().partyPeers).length + 1;
+    track("party_joined", { partyCode, members, spawnedNearInviter });
+  },
 }));

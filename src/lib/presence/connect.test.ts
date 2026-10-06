@@ -27,11 +27,13 @@ const self: PeerMeta = { id: "me", n: "Me", a: { b: "#000000", h: "#ffffff" } };
 const handlers: TransportHandlers = { onPacket: () => {}, onLeave: () => {} };
 const client = {} as SupabaseClient;
 
-function setup(remoteOutcome: "ok" | "fail" | "throw", configured = true) {
+function setup(initialOutcome: "ok" | "fail" | "throw", configured = true) {
   let clock = 1_000;
+  let remoteOutcome = initialOutcome;
   const remotes: StubTransport[] = [];
   const locals: StubTransport[] = [];
-  const connect = createConnector({
+  const connector = createConnector({
+    remoteConfigured: configured,
     client: () => (configured ? client : null),
     remote: (_c, room) => {
       const t = new StubTransport("supabase", room, remoteOutcome);
@@ -45,7 +47,14 @@ function setup(remoteOutcome: "ok" | "fail" | "throw", configured = true) {
     },
     now: () => clock,
   });
-  return { connect, remotes, locals, advance: (ms: number) => (clock += ms) };
+  return {
+    connect: connector.connect,
+    upgrade: connector.upgrade,
+    remotes,
+    locals,
+    advance: (ms: number) => (clock += ms),
+    setOutcome: (o: "ok" | "fail" | "throw") => (remoteOutcome = o),
+  };
 }
 
 describe("connectRoom", () => {
@@ -79,5 +88,34 @@ describe("connectRoom", () => {
     advance(SUPABASE_RETRY_AFTER_MS);
     await connect("district:d3", self, handlers);
     expect(remotes).toHaveLength(2);
+  });
+
+  it("offers an upgrade only when a network transport is configured", () => {
+    expect(setup("ok").upgrade).not.toBeNull();
+    expect(setup("ok", false).upgrade).toBeNull();
+  });
+
+  it("upgrades a fallback room once Supabase subscribes, and new rooms use it again", async () => {
+    const { connect, upgrade, remotes, setOutcome } = setup("fail");
+    expect((await connect("district:d1", self, handlers))?.kind).toBe("broadcast");
+    // Still failing: the upgrade gives up without touching the room's fallback.
+    expect(await upgrade!("district:d1", self, handlers)).toBeNull();
+    expect(remotes.at(-1)?.left).toBe(true);
+    setOutcome("ok");
+    const up = await upgrade!("district:d1", self, handlers);
+    expect(up?.kind).toBe("supabase");
+    // The success cleared the skip window: the next room goes straight to Supabase.
+    expect((await connect("district:d2", self, handlers))?.kind).toBe("supabase");
+  });
+
+  it("treats a failing client loader as not configured for this attempt", async () => {
+    const connector = createConnector({
+      remoteConfigured: true,
+      client: () => Promise.reject(new Error("chunk load failed")),
+      remote: (_c, room) => new StubTransport("supabase", room, "ok"),
+      local: (room) => new StubTransport("broadcast", room, "ok"),
+      now: () => 0,
+    });
+    expect((await connector.connect("district:d1", self, handlers))?.kind).toBe("broadcast");
   });
 });

@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { serverEnv } from "@/lib/env.server";
-import { ADMIN_COOKIE, adminCookieOptions, tokensMatch } from "@/lib/onboarding/auth";
+import { ADMIN_COOKIE, adminCookieOptions, refuseCrossSite, tokensMatch } from "@/lib/onboarding/auth";
 import type { SessionResponse } from "@/lib/onboarding/api";
 import { adminError, adminJson, parseAdminBody } from "@/lib/onboarding/http";
 import { adminSessionSchema } from "@/lib/validation/merchantDraft";
@@ -12,6 +12,8 @@ export const runtime = "nodejs";
  * `ADMIN_ACCESS_TOKEN`. Without a configured token: a no-op outside production, 404 in production.
  */
 export async function POST(req: NextRequest) {
+  const crossSite = refuseCrossSite(req);
+  if (crossSite) return crossSite;
   const expected = serverEnv.ADMIN_ACCESS_TOKEN;
   if (!expected) {
     if (serverEnv.NODE_ENV === "production") return adminError(404, "Not found");
@@ -26,7 +28,9 @@ export async function POST(req: NextRequest) {
 }
 
 /** DELETE /api/admin/session → clears the cookie. */
-export async function DELETE() {
+export async function DELETE(req: NextRequest) {
+  const crossSite = refuseCrossSite(req);
+  if (crossSite) return crossSite;
   const res = new NextResponse(null, { status: 204 });
   res.cookies.set(ADMIN_COOKIE, "", { ...adminCookieOptions(), maxAge: 0 });
   return res;

@@ -19,6 +19,8 @@ const MAX_COORD = 20_000;
 export const MAX_NAME_CHARS = 24;
 export const MAX_OUTFIT_FIELD_CHARS = 24;
 export const MAX_ROOM_CHARS = 64;
+/** Sender clocks past this (year 2100) are not clocks. */
+const MAX_SENDER_CLOCK_MS = 4_102_444_800_000;
 
 const colorSchema = z.string().regex(HEX_COLOR);
 const shortText = (max: number) => z.string().min(1).max(max);
@@ -36,8 +38,11 @@ const outfitSchema = z
 
 export const packetSchema = z
   .object({
-    /** Sender clock (ms since epoch); only used for ordering within one peer. */
-    t: z.number().finite().nonnegative(),
+    /**
+     * Sender clock (ms since epoch). Receivers order by arrival and only use this to drop exact
+     * duplicates: a peer-supplied clock must not be able to lock another peer out.
+     */
+    t: z.number().finite().nonnegative().max(MAX_SENDER_CLOCK_MS),
     /** Peer id: random per tab, never an account id. */
     id: z.string().min(1).max(40),
     x: coord,
@@ -164,6 +169,14 @@ export interface PresenceTransport {
 
 /** Hard ceiling for inbound packets per peer per second; anything faster is ignored. */
 export const MAX_PACKETS_PER_SECOND = 30;
+/** Most peers one room keeps (far beyond what is drawn); a flood of fake ids stops here. */
+export const MAX_ROOM_PEERS = 200;
+/** Parties are a few friends; more "members" than this is noise. */
+export const MAX_PARTY_PEERS = 16;
+/** New peer ids admitted per second per room; rotating ids does not get around the rate limit. */
+export const MAX_NEW_PEERS_PER_SECOND = 20;
+/** After the network transport fails, how long until it is tried again (also for a live room). */
+export const TRANSPORT_RETRY_MS = 60_000;
 /** Outbound cadence of the room publisher. */
 export const PUBLISH_INTERVAL_MS = 100;
 /** A standing peer still announces itself this often so silence means "gone". */

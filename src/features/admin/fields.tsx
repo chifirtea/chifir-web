@@ -178,6 +178,44 @@ export function ColorField({ label, value, onChange, swatches = [] }: { label: s
   );
 }
 
+/** "a, b ,, c" → ["a", "b", "c"] (trimmed, empty entries dropped). */
+export const splitList = (text: string): string[] => text.split(",").map((t) => t.trim()).filter(Boolean);
+
+/**
+ * Comma-separated list input. The raw text is local state so a trailing comma survives while the
+ * reviewer is typing (re-deriving the text from the parsed list would swallow it).
+ */
+export function CommaListField({ label, value, onChange, hint, error, placeholder, className, transform }: { label: string; value: readonly string[]; onChange: (v: string[]) => void; hint?: ReactNode; error?: string | undefined; placeholder?: string; className?: string; transform?: (item: string) => string }) {
+  const [text, setText] = useState(value.join(", "));
+  const joined = value.join(", ");
+  const [seen, setSeen] = useState(joined);
+  if (joined !== seen && splitList(text).join(", ") !== joined) {
+    // The list changed from outside (e.g. a save normalised it): show the new value.
+    setSeen(joined);
+    setText(joined);
+  }
+  return (
+    <Field label={label} hint={hint} error={error} className={className}>
+      {(id) => (
+        <input
+          id={id}
+          className={inputClass}
+          value={text}
+          placeholder={placeholder}
+          spellCheck={false}
+          onChange={(e) => {
+            const raw = e.target.value;
+            const next = splitList(raw).map((t) => (transform ? transform(t) : t));
+            setText(raw);
+            setSeen(next.join(", "));
+            onChange(next);
+          }}
+        />
+      )}
+    </Field>
+  );
+}
+
 /**
  * Editable list of short strings. `locked` items (platform rules) are shown but cannot be edited
  * or removed: they are re-added by the server anyway.
@@ -198,7 +236,9 @@ export function ListEditor({ label, items, onChange, max, maxLength = 200, locke
             {items.map((item, i) => {
               const isLocked = locked.includes(item);
               return (
-                <li key={`${i}-${item}`} className="flex items-start gap-2">
+                // Keyed by position: a key that included the text would remount the input on every
+                // keystroke and drop focus. Rows are only appended or removed, never reordered.
+                <li key={i} className="flex items-start gap-2">
                   {isLocked ? (
                     <p className="flex min-h-9 flex-1 items-center gap-2 rounded-lg border border-line bg-white/3 px-3 py-2 text-[13px] text-fog-2">
                       <Lock className="h-3.5 w-3.5 shrink-0 text-sodium" aria-label="Platform rule" />

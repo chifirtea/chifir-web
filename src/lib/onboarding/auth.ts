@@ -43,9 +43,59 @@ export function adminGate(input: AdminGateInput): AdminGate {
   return "unauthorized";
 }
 
+export interface RequestOriginInput {
+  method: string;
+  /** `Sec-Fetch-Site` (sent by every current browser). */
+  secFetchSite: string | null;
+  origin: string | null;
+  /** `Host` and `X-Forwarded-Host` as received. */
+  hosts: ReadonlyArray<string | null>;
+}
+
+const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+
+/**
+ * CSRF guard for state-changing admin requests. Admin is open in development and the cookie is
+ * only `SameSite=Lax`, so a page on another origin (or a same-site subdomain) must not be able to
+ * POST here. Browsers always send `Sec-Fetch-Site` (or at least `Origin`) on such requests; a
+ * request with neither comes from a non-browser client, which a CSRF attack cannot use.
+ */
+export function crossSiteProblem(input: RequestOriginInput): string | null {
+  if (SAFE_METHODS.has(input.method.toUpperCase())) return null;
+  if (input.secFetchSite) {
+    return input.secFetchSite === "same-origin" || input.secFetchSite === "none" ? null : "Cross-site admin requests are refused.";
+  }
+  if (input.origin === null) return null;
+  let host: string;
+  try {
+    host = new URL(input.origin).host.toLowerCase();
+  } catch {
+    return "Cross-site admin requests are refused.";
+  }
+  return input.hosts.some((h) => h?.split(",")[0]?.trim().toLowerCase() === host) ? null : "Cross-site admin requests are refused.";
+}
+
+export function requestOrigin(req: NextRequest): RequestOriginInput {
+  return {
+    method: req.method,
+    secFetchSite: req.headers.get("sec-fetch-site"),
+    origin: req.headers.get("origin"),
+    hosts: [req.headers.get("host"), req.headers.get("x-forwarded-host")],
+  };
+}
+
+/** 403 for a cross-site state-changing request, else null. */
+export function refuseCrossSite(req: NextRequest): NextResponse | null {
+  const problem = crossSiteProblem(requestOrigin(req));
+  return problem ? NextResponse.json({ error: problem }, { status: 403, headers: { "cache-control": "no-store" } }) : null;
+}
+
 const isProduction = () => serverEnv.NODE_ENV === "production";
 
-/** Returns a response to send when the request is not admin, or null when it may proceed. */
+/**
+ * Returns a response to send when the request is not admin (or is a cross-site write), or null
+ * when it may proceed.
+ */
 export function requireAdmin(req: NextRequest): NextResponse | null {
   const gate = adminGate({
     configuredToken: serverEnv.ADMIN_ACCESS_TOKEN,
@@ -53,7 +103,7 @@ export function requireAdmin(req: NextRequest): NextResponse | null {
     authorization: req.headers.get("authorization"),
     cookie: req.cookies.get(ADMIN_COOKIE)?.value,
   });
-  if (gate === "ok") return null;
+  if (gate === "ok") return refuseCrossSite(req);
   if (gate === "not_found") return NextResponse.json({ error: "Not found" }, { status: 404 });
   return NextResponse.json(
     { error: "Admin access required." },

@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { RewardAppearance } from "@/types/domain";
+import { isStreetRoom } from "./rooms";
 import {
   createBuffer,
   isSilent,
@@ -7,7 +8,10 @@ import {
   type InterpolationBuffer,
 } from "./interpolation";
 import {
+  MAX_NEW_PEERS_PER_SECOND,
   MAX_PACKETS_PER_SECOND,
+  MAX_PARTY_PEERS,
+  MAX_ROOM_PEERS,
   packetToOutfit,
   type PresencePacket,
   type TransportKind,
@@ -24,20 +28,29 @@ export interface Peer {
   buffer: InterpolationBuffer;
   /** Receiver clock of the last accepted packet. */
   lastSeen: number;
-  /** Sender clock of the last accepted packet; older ones are out of order and dropped. */
+  /** Sender clock of the last accepted packet; a repeat of it is a duplicate and dropped. */
   lastT: number;
   rate: RateWindow;
 }
 
-/** A party member heard on the party channel: coarse pose + room, not interpolated. */
+/**
+ * A party member heard on the party channel, whatever room they are in. Pose, buffer and clocks
+ * are mutated in place; the record is replaced only on join, room change or look change, so the
+ * member list re-renders for those and not for every step.
+ */
 export interface PartyPeer {
   id: string;
   name: string;
+  bodyColor: string;
+  hairColor: string;
+  outfit: RewardAppearance | null;
   x: number;
   z: number;
   yaw: number;
   /** Room key the member reported, when known. */
   room: string | null;
+  /** For drawing a member who stands nearby but in another room (across a district edge). */
+  buffer: InterpolationBuffer;
   lastSeen: number;
   lastT: number;
   rate: RateWindow;
@@ -75,7 +88,7 @@ export interface PresenceState {
   /** Switching rooms clears peers: nobody from the old room can be in the new one. */
   setRoom: (room: string | null, transport: TransportKind | null) => void;
   setTransport: (transport: TransportKind | null) => void;
-  /** Applies a validated room packet. Returns false when ignored (self, stale, rate-limited). */
+  /** Applies a validated room packet. Returns false when ignored (self, duplicate, rate-limited, room full). */
   applyPacket: (packet: PresencePacket, now: number) => boolean;
   applyPartyPacket: (packet: PresencePacket, now: number) => boolean;
   removePeer: (peerId: string) => void;
@@ -104,14 +117,30 @@ const DEFAULT_IDENTITY: Identity = {
   partyCode: null,
 };
 
-/** Sliding one-second window; true when this packet exceeds the per-peer ceiling. */
-function overRate(rate: RateWindow, now: number): boolean {
+/** One-second window; true when this event exceeds `limit` within the window. */
+function overRate(rate: RateWindow, now: number, limit: number = MAX_PACKETS_PER_SECOND): boolean {
   if (now - rate.start >= 1000) {
     rate.start = now;
     rate.count = 0;
   }
   rate.count += 1;
-  return rate.count > MAX_PACKETS_PER_SECOND;
+  return rate.count > limit;
+}
+
+/**
+ * New-id admission windows (room and party). Not React state: only the packet path reads them.
+ * Reset whenever the set they guard is cleared.
+ */
+const roomAdmissions: RateWindow = { start: -Infinity, count: 0 };
+const partyAdmissions: RateWindow = { start: -Infinity, count: 0 };
+function resetWindow(rate: RateWindow): void {
+  rate.start = -Infinity;
+  rate.count = 0;
+}
+
+/** Whether a packet from an id we have not seen yet may create a peer. */
+function admit(size: number, cap: number, window: RateWindow, now: number): boolean {
+  return size < cap && !overRate(window, now, MAX_NEW_PEERS_PER_SECOND);
 }
 
 function sameOutfit(a: RewardAppearance | null, b: RewardAppearance | null): boolean {
@@ -128,7 +157,10 @@ export const usePresenceStore = create<PresenceState>((set, get) => ({
   partyPeers: {},
 
   setMe: (patch) => set((s) => ({ me: { ...s.me, ...patch } })),
-  setRoom: (room, transport) => set({ room, transport, peers: {} }),
+  setRoom: (room, transport) => {
+    resetWindow(roomAdmissions);
+    set({ room, transport, peers: {} });
+  },
   setTransport: (transport) => set({ transport }),
 
   applyPacket: (packet, now) => {
@@ -137,7 +169,9 @@ export const usePresenceStore = create<PresenceState>((set, get) => ({
     const existing = peers[packet.id];
     if (existing) {
       if (overRate(existing.rate, now)) return false;
-      if (packet.t <= existing.lastT) return false;
+      // Arrival order: both transports deliver one sender's packets in order. Trusting the sender
+      // clock for ordering let a single forged far-future `t` lock the real peer out.
+      if (packet.t === existing.lastT) return false;
       existing.lastT = packet.t;
       existing.lastSeen = now;
       pushSample(existing.buffer, { t: now, x: packet.x, z: packet.z, yaw: packet.yaw, moving: packet.m === 1 });
@@ -155,6 +189,7 @@ export const usePresenceStore = create<PresenceState>((set, get) => ({
       }
       return true;
     }
+    if (!admit(Object.keys(peers).length, MAX_ROOM_PEERS, roomAdmissions, now)) return false;
     const buffer = createBuffer();
     pushSample(buffer, { t: now, x: packet.x, z: packet.z, yaw: packet.yaw, moving: packet.m === 1 });
     const peer: Peer = {
@@ -178,22 +213,45 @@ export const usePresenceStore = create<PresenceState>((set, get) => ({
     if (packet.id === me.peerId) return false;
     // Only members of our party belong in the list, whatever channel delivered the packet.
     if (!me.partyCode || packet.p !== me.partyCode) return false;
+    const room = packet.r ?? null;
+    const outfit = packetToOutfit(packet.o);
+    const sample = { t: now, x: packet.x, z: packet.z, yaw: packet.yaw, moving: packet.m === 1 };
     const existing = partyPeers[packet.id];
     if (existing) {
       if (overRate(existing.rate, now)) return false;
-      if (packet.t <= existing.lastT) return false;
-      const room = packet.r ?? null;
-      const next: PartyPeer = { ...existing, name: packet.n, x: packet.x, z: packet.z, yaw: packet.yaw, room, lastSeen: now, lastT: packet.t };
-      set({ partyPeers: { ...partyPeers, [packet.id]: next } });
+      if (packet.t === existing.lastT) return false;
+      existing.x = packet.x;
+      existing.z = packet.z;
+      existing.yaw = packet.yaw;
+      existing.lastSeen = now;
+      existing.lastT = packet.t;
+      pushSample(existing.buffer, sample);
+      const changed =
+        existing.room !== room ||
+        existing.name !== packet.n ||
+        existing.bodyColor !== packet.a.b ||
+        existing.hairColor !== packet.a.h ||
+        !sameOutfit(existing.outfit, outfit);
+      if (changed) {
+        const next: PartyPeer = { ...existing, name: packet.n, bodyColor: packet.a.b, hairColor: packet.a.h, outfit, room };
+        set({ partyPeers: { ...partyPeers, [packet.id]: next } });
+      }
       return true;
     }
+    if (!admit(Object.keys(partyPeers).length, MAX_PARTY_PEERS, partyAdmissions, now)) return false;
+    const buffer = createBuffer();
+    pushSample(buffer, sample);
     const peer: PartyPeer = {
       id: packet.id,
       name: packet.n,
+      bodyColor: packet.a.b,
+      hairColor: packet.a.h,
+      outfit,
       x: packet.x,
       z: packet.z,
       yaw: packet.yaw,
-      room: packet.r ?? null,
+      room,
+      buffer,
       lastSeen: now,
       lastT: packet.t,
       rate: { start: now, count: 1 },
@@ -263,8 +321,14 @@ export const usePresenceStore = create<PresenceState>((set, get) => ({
     return removed;
   },
 
-  clearPeers: () => set({ peers: {} }),
-  clearPartyPeers: () => set({ partyPeers: {} }),
+  clearPeers: () => {
+    resetWindow(roomAdmissions);
+    set({ peers: {} });
+  },
+  clearPartyPeers: () => {
+    resetWindow(partyAdmissions);
+    set({ partyPeers: {} });
+  },
 }));
 
 /** Everyone in the room including us. */
@@ -275,3 +339,28 @@ export const selectPartyPeers = (s: PresenceState): Record<string, PartyPeer> =>
 
 export const selectPartyMemberCount = (s: PresenceState): number =>
   s.me.partyCode ? Object.keys(s.partyPeers).length + 1 : 0;
+
+/**
+ * Party members on the street within this distance but in another district room are drawn from
+ * the party channel (and that channel then carries full-rate poses), so two friends a few steps
+ * apart on either side of a district edge never lose sight of each other.
+ */
+export const PARTY_CROSS_ROOM_RADIUS_M = 60;
+
+/** True when this party member should be drawn from the party channel rather than the room. */
+export function seenAcrossRooms(member: PartyPeer, myRoom: string | null, x: number, z: number): boolean {
+  if (!isStreetRoom(myRoom) || !isStreetRoom(member.room) || member.room === myRoom) return false;
+  const dx = member.x - x;
+  const dz = member.z - z;
+  return dx * dx + dz * dz <= PARTY_CROSS_ROOM_RADIUS_M * PARTY_CROSS_ROOM_RADIUS_M;
+}
+
+/** Any party member nearby in another room (see `seenAcrossRooms`). */
+export function partyNearbyElsewhere(s: PresenceState, myRoom: string | null, x: number, z: number): boolean {
+  if (!s.me.partyCode) return false;
+  for (const id in s.partyPeers) {
+    const member = s.partyPeers[id];
+    if (member && seenAcrossRooms(member, myRoom, x, z)) return true;
+  }
+  return false;
+}

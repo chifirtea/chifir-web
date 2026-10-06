@@ -7,11 +7,11 @@ import { playerRig } from "@/engine/player/playerRig";
 import { useWorldStore } from "@/engine/store/worldStore";
 import { useUser } from "@/features/auth/useUser";
 import { track } from "@/lib/analytics/client";
-import { connectRoom } from "./connect";
+import { presenceConnector } from "./connect";
 import { PresenceController } from "./controller";
 import { bodyColorFor, displayNameFor, getPeerId, hairColorFor } from "./identity";
-import { selectRoomCount, usePresenceStore } from "./presenceStore";
-import { roomForLocation } from "./rooms";
+import { partyNearbyElsewhere, selectRoomCount, usePresenceStore } from "./presenceStore";
+import { nextRoom, type RoomTrack } from "./rooms";
 import { MAX_NAME_CHARS, PUBLISH_INTERVAL_MS } from "./transport";
 
 /**
@@ -38,7 +38,8 @@ export function usePresence(): void {
   useEffect(() => {
     const store = usePresenceStore.getState();
     const controller = new PresenceController({
-      connect: connectRoom,
+      connect: presenceConnector.connect,
+      upgrade: presenceConnector.upgrade,
       store,
       now: Date.now,
       onRoomJoined: (room, transport) => {
@@ -46,18 +47,24 @@ export function usePresence(): void {
       },
     });
 
+    // Previous tick's room and position, for the district-edge hysteresis.
+    let lastRoom: RoomTrack | null = null;
     const tick = () => {
       const world = useWorldStore.getState();
-      const me = usePresenceStore.getState().me;
+      const presence = usePresenceStore.getState();
+      const { x, z } = playerRig;
+      const room = nextRoom(world.location, getCityIndex(), x, z, lastRoom);
+      lastRoom = { room, x, z };
       controller.tick({
         ready: world.ready,
         hidden: typeof document !== "undefined" && document.visibilityState === "hidden",
-        room: roomForLocation(world.location, getCityIndex(), playerRig.x, playerRig.z),
-        x: playerRig.x,
-        z: playerRig.z,
+        room,
+        x,
+        z,
         yaw: playerRig.yaw,
         moving: playerRig.moving,
-        me,
+        me: presence.me,
+        partyDetail: partyNearbyElsewhere(presence, room, x, z),
       });
     };
     const interval = setInterval(tick, PUBLISH_INTERVAL_MS);

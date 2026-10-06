@@ -20,6 +20,16 @@ import { addressSchema, fulfillmentTypeSchema } from "./checkout";
 
 export const MAX_PROPOSAL_PRODUCTS = 40;
 export const MAX_VARIANT_OPTIONS = 30;
+/** Largest price (in cents) a proposal may carry; extraction can parse more, so the heuristic drops those. */
+export const MAX_PRICE_CENTS = 100_000_000;
+/** String caps the heuristic clamps to (kept beside the schema so the two cannot drift). */
+export const PROPOSAL_TEXT_LIMITS = {
+  knowledge: 200,
+  size: 20,
+  color: 30,
+  optionName: 60,
+  url: 2048,
+} as const;
 
 export const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
 export const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -69,7 +79,7 @@ void enumCoverage;
 const text = (max: number) => z.string().trim().min(1).max(max);
 const optionalText = (max: number) => z.string().trim().min(1).max(max).optional();
 const idSchema = z.string().min(1).max(64);
-const cents = z.number().int().min(0).max(100_000_000);
+const cents = z.number().int().min(0).max(MAX_PRICE_CENTS);
 const minutes = z.number().int().min(0).max(24 * 60 * 14);
 const days = z.number().int().min(0).max(365);
 
@@ -80,7 +90,7 @@ export const categorySchema = z
   .regex(CATEGORY, "Dot-namespaced, e.g. food.ramen or fashion.streetwear")
   .max(64);
 /** External media and site links: http(s) only. Images stay untrusted (rendered with fallbacks). */
-export const externalUrlSchema = z.url({ protocol: /^https?$/ }).max(2048);
+export const externalUrlSchema = z.url({ protocol: /^https?$/ }).max(PROPOSAL_TEXT_LIMITS.url);
 const tagSchema = z.string().trim().min(1).max(32);
 
 export const brandPaletteSchema = z.strictObject({
@@ -155,12 +165,16 @@ export const merchantFieldsSchema = z.strictObject({
   interiorTemplate: interiorTemplateSchema,
   storefrontConfig: storefrontConfigSchema,
   fulfillment: fulfillmentOptionsSchema,
-  sponsored: z.boolean().default(false),
+  /**
+   * Sponsorship is a business decision (it boosts search ranking), never something extracted or
+   * proposed: the AI tool schema leaves it out and any other value is rejected.
+   */
+  sponsored: z.literal(false).default(false),
 });
 
 export const variantOptionSchema = z.strictObject({
   id: idSchema,
-  name: text(60),
+  name: text(PROPOSAL_TEXT_LIMITS.optionName),
   priceDeltaCents: z.number().int().min(-100_000_000).max(100_000_000),
   inventoryStatus: inventoryStatusSchema.optional(),
 });
@@ -179,8 +193,8 @@ export const productAttributesSchema = z.strictObject({
   dietary: z.array(dietaryTagSchema).max(7).optional(),
   allergens: z.array(text(40)).max(12).optional(),
   calories: z.number().int().min(0).max(10_000).optional(),
-  sizes: z.array(text(20)).max(20).optional(),
-  colors: z.array(text(30)).max(20).optional(),
+  sizes: z.array(text(PROPOSAL_TEXT_LIMITS.size)).max(20).optional(),
+  colors: z.array(text(PROPOSAL_TEXT_LIMITS.color)).max(20).optional(),
   material: optionalText(80),
   occasion: z.array(text(30)).max(8).optional(),
   gender: z.enum(["men", "women", "unisex"]).optional(),
@@ -223,7 +237,7 @@ export const employeeProposalSchema = z.strictObject({
   personality: text(400),
   tone: text(120),
   greeting: text(280),
-  knowledge: z.array(text(200)).max(20),
+  knowledge: z.array(text(PROPOSAL_TEXT_LIMITS.knowledge)).max(20),
   upsellRules: z.array(text(200)).max(10),
   prohibitedClaims: z.array(text(200)).min(1).max(12),
   brandLanguage: z.array(text(200)).max(10),

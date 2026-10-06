@@ -4,7 +4,7 @@ import type { MerchantType, StorefrontConfig } from "@/types/domain";
 import { INTERIOR_RULE_LIST, STOREFRONT_RULE_LIST } from "@/lib/onboarding/placement";
 import type { Extraction } from "@/lib/onboarding/types";
 import { CHANNELS, changeMerchantType, contrastRatio, toggleChannel, type Channel, type Proposal, type ProposalMerchant } from "./editor";
-import { ColorField, Section, SelectField, TextArea, TextField, Thumb, Toggle } from "./fields";
+import { ColorField, CommaListField, Section, SelectField, TextArea, TextField, Thumb, Toggle } from "./fields";
 import { InteriorPreview, StorefrontPreview } from "./TemplatePreview";
 
 const TYPES: Array<{ value: MerchantType; label: string }> = [
@@ -60,7 +60,7 @@ export function MerchantEditor({ proposal, extraction, onChange }: { proposal: P
               onChange({ ...proposal, merchant: next });
             }}
           />
-          <TextField label="Tags" value={m.tags.join(", ")} onChange={(v) => set({ tags: v.split(",").map((t) => t.trim().toLowerCase()).filter(Boolean).slice(0, 12) })} hint="Comma separated, max 12" />
+          <CommaListField label="Tags" value={m.tags} transform={(t) => t.toLowerCase()} onChange={(tags) => set({ tags: tags.slice(0, 12) })} hint="Comma separated, max 12" />
         </fieldset>
 
         <fieldset className="flex flex-col gap-3">

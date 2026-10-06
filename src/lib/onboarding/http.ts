@@ -19,10 +19,20 @@ export function adminError(
   return NextResponse.json<AdminErrorResponse>({ error, ...extra }, { status, headers: NO_STORE });
 }
 
+/** `application/json`, optionally with parameters (`; charset=utf-8`). */
+export const isJsonContentType = (value: string | null): boolean => /^application\/json\s*(;|$)/i.test(value?.trim() ?? "");
+
+/**
+ * Parses a JSON body against a strict schema. Only `application/json` is accepted: a `text/plain`
+ * or form POST is a CORS "simple request" that any web page can send without a preflight.
+ */
 export async function parseAdminBody<S extends z.ZodType>(
   req: NextRequest,
   schema: S,
 ): Promise<{ ok: true; data: z.output<S> } | { ok: false; response: NextResponse }> {
+  if (!isJsonContentType(req.headers.get("content-type"))) {
+    return { ok: false, response: adminError(415, "Send the body as application/json.") };
+  }
   let json: unknown = null;
   try {
     json = await req.json();

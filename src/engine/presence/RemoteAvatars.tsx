@@ -12,15 +12,17 @@ import {
   latestSample,
   sampleAt,
   type InterpolatedPose,
+  type InterpolationBuffer,
 } from "@/lib/presence/interpolation";
-import { usePresenceStore, type Peer } from "@/lib/presence/presenceStore";
+import { seenAcrossRooms, usePresenceStore } from "@/lib/presence/presenceStore";
+import type { RewardAppearance } from "@/types/domain";
 import { acquireNameTag, PARTY_COLOR, releaseNameTag, TAG_HEIGHT_M, TAG_WIDTH_M } from "./nameTag";
 
 /** Phones draw fewer strangers; the nearest ones win. */
 const MAX_PEERS_MOBILE = 24;
 const MAX_PEERS_DESKTOP = 48;
-/** When over the cap, re-pick the nearest peers this often. */
-const RESORT_MS = 2000;
+/** When over the cap, or with party members around, re-pick who is drawn this often. */
+const RESORT_MS = 1000;
 const TAG_Y = 2.05;
 
 const scratch: InterpolatedPose = { x: 0, z: 0, yaw: 0, speed: 0 };
@@ -39,7 +41,18 @@ function ringAssets(): { geometry: RingGeometry; material: MeshBasicMaterial } {
   return { geometry: ringGeometry, material: ringMaterial };
 }
 
-function distanceSqToPlayer(peer: Peer): number {
+/** One figure to draw: a room peer, or a party member just across a district edge. */
+interface Figure {
+  id: string;
+  name: string;
+  bodyColor: string;
+  hairColor: string;
+  outfit: RewardAppearance | null;
+  buffer: InterpolationBuffer;
+  party: boolean;
+}
+
+function distanceSqToPlayer(peer: Figure): number {
   const s = latestSample(peer.buffer);
   if (!s) return Infinity;
   const dx = s.x - playerRig.x;
@@ -48,46 +61,65 @@ function distanceSqToPlayer(peer: Peer): number {
 }
 
 /**
- * Everyone else in the room, interpolated 120 ms behind the wire. Re-renders only when peers
- * join, leave or change their look; positions are written straight to the groups each frame.
+ * Everyone else in the room, interpolated 120 ms behind the wire, plus party members standing
+ * nearby in the next district (from the party channel, which then runs at full rate), so friends
+ * never vanish while only one of them has crossed an edge. Re-renders on join, leave and look
+ * changes, and on a slow tick while capped or partied; positions are written to the groups each
+ * frame. Figures are keyed by peer id, so a friend moving between the two sources keeps one avatar.
  */
 export function RemoteAvatars() {
   const peers = usePresenceStore((s) => s.peers);
+  const partyPeers = usePresenceStore((s) => s.partyPeers);
+  const room = usePresenceStore((s) => s.room);
   const myParty = usePresenceStore((s) => s.me.partyCode);
   const mobile = useQualityStore((s) => s.mobile);
   const cap = mobile ? MAX_PEERS_MOBILE : MAX_PEERS_DESKTOP;
   const count = Object.keys(peers).length;
+  const partied = Object.keys(partyPeers).length > 0;
   const [resort, setResort] = useState(0);
 
   useEffect(() => {
-    if (count <= cap) return;
+    if (count <= cap && !partied) return;
     const t = setInterval(() => setResort((n) => n + 1), RESORT_MS);
     return () => clearInterval(t);
-  }, [count, cap]);
+  }, [count, cap, partied]);
 
-  // Renders happen on join/leave (and on `resort` ticks while over the cap), so sorting here is cheap.
+  // Renders are rare (see above), so building the list here is cheap.
   void resort;
-  const list = Object.values(peers);
+  const list: Figure[] = Object.values(peers).map((p) => ({
+    id: p.id,
+    name: p.name,
+    bodyColor: p.bodyColor,
+    hairColor: p.hairColor,
+    outfit: p.outfit,
+    buffer: p.buffer,
+    party: Boolean(myParty) && p.partyCode === myParty,
+  }));
+  for (const m of Object.values(partyPeers)) {
+    if (peers[m.id] || !seenAcrossRooms(m, room, playerRig.x, playerRig.z)) continue;
+    list.push({ id: m.id, name: m.name, bodyColor: m.bodyColor, hairColor: m.hairColor, outfit: m.outfit, buffer: m.buffer, party: true });
+  }
   const shown =
     list.length <= cap
       ? list
       : list
-          .map((peer) => ({ peer, d: distanceSqToPlayer(peer) }))
+          .map((figure) => ({ figure, d: distanceSqToPlayer(figure) - (figure.party ? 1e9 : 0) }))
           .sort((a, b) => a.d - b.d)
           .slice(0, cap)
-          .map((e) => e.peer);
+          .map((e) => e.figure);
 
   if (shown.length === 0) return null;
   return (
     <group>
-      {shown.map((peer) => (
-        <RemotePeer key={peer.id} peer={peer} party={Boolean(myParty) && peer.partyCode === myParty} />
+      {shown.map((figure) => (
+        <RemotePeer key={figure.id} peer={figure} />
       ))}
     </group>
   );
 }
 
-function RemotePeer({ peer, party }: { peer: Peer; party: boolean }) {
+function RemotePeer({ peer }: { peer: Figure }) {
+  const party = peer.party;
   const group = useRef<Group>(null);
   const ring = useRef<Mesh>(null);
   // `NpcAvatar` reads this holder each frame for the walk cycle; a plain object, not a ref.

@@ -1,5 +1,6 @@
 import type { CityIndex } from "@/city/cityIndex";
 import { districtAt } from "@/city/cityIndex";
+import { interiorOriginFor, isInteriorZ } from "@/engine/interior/types";
 import type { Location, PlayerPose } from "@/engine/store/worldStore";
 import { PARTY_CODE_PATTERN } from "@/lib/presence/transport";
 
@@ -89,6 +90,8 @@ const SPAWN_OFFSETS: ReadonlyArray<readonly [behind: number, side: number]> = [
   [SPAWN_BEHIND_M, 0],
   [0, 1.5],
   [0, -1.5],
+  [-SPAWN_BEHIND_M, SPAWN_SIDE_M],
+  [-SPAWN_BEHIND_M, -SPAWN_SIDE_M],
   [-SPAWN_BEHIND_M, 0],
 ];
 
@@ -110,14 +113,44 @@ export function poseBehind(
   };
 }
 
-/** The first free spot near the member (see SPAWN_OFFSETS); behind-and-aside when all are blocked. */
+/**
+ * The first free spot near the member (see SPAWN_OFFSETS). `preferred` narrows the first pass
+ * (the street spawn wants the member's own district room: 2 m behind someone standing on an edge
+ * is the next district); the second pass takes any free spot, and behind-and-aside is the last
+ * resort when everything is blocked.
+ */
 export function spawnNear(
   member: { x: number; z: number; yaw: number },
   isFree: (x: number, z: number) => boolean = () => true,
+  preferred?: (x: number, z: number) => boolean,
 ): PlayerPose {
-  for (const [behind, side] of SPAWN_OFFSETS) {
-    const pose = poseBehind(member, behind, side);
-    if (isFree(pose.x, pose.z)) return pose;
+  const candidates = SPAWN_OFFSETS.map(([behind, side]) => poseBehind(member, behind, side));
+  if (preferred) {
+    const best = candidates.find((p) => preferred(p.x, p.z) && isFree(p.x, p.z));
+    if (best) return best;
   }
-  return poseBehind(member);
+  return candidates.find((p) => isFree(p.x, p.z)) ?? poseBehind(member);
+}
+
+/** How far off a district's bounds a street position still counts as on the map. */
+export const STREET_MARGIN_M = 10;
+/** Half-extent around an interior's origin that holds every room template (largest 18 x 14 m). */
+export const INTERIOR_REACH_M = 12;
+
+/**
+ * Whether a peer-reported street position is somewhere a player can stand. Party positions come
+ * from other people's packets and drive a teleport, so anything off the map is ignored.
+ */
+export function onStreetMap(index: CityIndex, x: number, z: number): boolean {
+  if (isInteriorZ(z)) return false;
+  const m = STREET_MARGIN_M;
+  return index.snapshot.districts.some(
+    ({ bounds: b }) => x >= b.minX - m && x <= b.maxX + m && z >= b.minZ - m && z <= b.maxZ + m,
+  );
+}
+
+/** Whether a peer-reported position lies inside the given parcel's interior room. */
+export function insideInterior(parcel: { position: { x: number; z: number } }, x: number, z: number): boolean {
+  const o = interiorOriginFor(parcel);
+  return Math.abs(x - o.x) <= INTERIOR_REACH_M && Math.abs(z - o.z) <= INTERIOR_REACH_M;
 }

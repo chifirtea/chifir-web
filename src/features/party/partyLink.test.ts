@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { CityIndex } from "@/city/cityIndex";
+import { roomForLocation } from "@/lib/presence/rooms";
 import {
   buildInviteUrl,
   generatePartyCode,
+  insideInterior,
   inviteTargetFor,
   isValidPartyCode,
+  onStreetMap,
   parseInviteUrl,
   parsePartyCode,
   poseBehind,
@@ -117,5 +120,46 @@ describe("spawnNear", () => {
 
   it("falls back to the default spot when everything is blocked", () => {
     expect(spawnNear(member, () => false)).toEqual(poseBehind(member));
+  });
+
+  it("prefers spots in the member's own room: an inviter on a district edge gets the friend beside them", () => {
+    // Central Plaza / Event Square share the z = -40 edge. The inviter stands 1.5 m inside the
+    // plaza facing +Z, so "2 m behind" is across the edge in Event Square.
+    const edge = {
+      snapshot: {
+        districts: [
+          { id: "d-plaza", slug: "central-plaza", bounds: { minX: -40, minZ: -40, maxX: 40, maxZ: 40 } },
+          { id: "d-event", slug: "event-square", bounds: { minX: -60, minZ: -140, maxX: 60, maxZ: -40 } },
+        ],
+      },
+    } as unknown as CityIndex;
+    const inviter = { x: 0, z: -38.5, yaw: 0 };
+    const roomAt = (x: number, z: number) => roomForLocation({ kind: "street" }, edge, x, z);
+    expect(roomAt(spawnNear(inviter).x, spawnNear(inviter).z)).toBe("district:d-event");
+    const pose = spawnNear(inviter, () => true, (x, z) => roomAt(x, z) === "district:d-plaza");
+    expect(roomAt(pose.x, pose.z)).toBe("district:d-plaza");
+    expect(Math.hypot(pose.x - inviter.x, pose.z - inviter.z)).toBeLessThan(3);
+    expect(pose.yaw).toBe(0);
+    // No spot in the room at all: any free spot still beats the district spawn far away.
+    const anywhere = spawnNear(inviter, (_x, z) => z < -40, () => false);
+    expect(anywhere.z).toBeLessThan(-40);
+  });
+});
+
+describe("member position checks (peer data drives a teleport)", () => {
+  it("accepts street positions on or just off a district, nothing else", () => {
+    expect(onStreetMap(index, 0, 21)).toBe(true);
+    expect(onStreetMap(index, 45, 0)).toBe(true);
+    expect(onStreetMap(index, 19_999, 0)).toBe(false);
+    expect(onStreetMap(index, 0, -19_999)).toBe(false);
+    expect(onStreetMap(index, 0, 5000)).toBe(false);
+  });
+
+  it("accepts interior positions only inside that parcel's room", () => {
+    const parcel = { position: { x: -38, z: -92 } };
+    expect(insideInterior(parcel, -38, 5000 - 92)).toBe(true);
+    expect(insideInterior(parcel, -38 + 8, 5000 - 92 - 6)).toBe(true);
+    expect(insideInterior(parcel, -38, 5000 - 60)).toBe(false);
+    expect(insideInterior(parcel, 19_999, 5000 - 92)).toBe(false);
   });
 });

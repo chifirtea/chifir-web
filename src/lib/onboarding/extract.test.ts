@@ -14,7 +14,7 @@ import {
   slugify,
   storeNameFromTitle,
 } from "./extract";
-import { COLLECTIONS_JSON, FIXTURE_ORIGIN, INDEX_HTML, PRODUCTS_JSON } from "./shopify.fixture";
+import { COLLECTIONS_JSON, FIXTURE_ORIGIN, INDEX_HTML, INJECTION_IN_BODY, INJECTION_IN_META, PRODUCTS_JSON } from "./shopify.fixture";
 import { OnboardingError, type FetchDeps } from "./ssrf";
 import { asExtraction, sourcePrices } from "./types";
 
@@ -141,7 +141,7 @@ describe("parseHomepage", () => {
 
   it("reads title, description, og tags and theme colour", () => {
     expect(meta.title).toBe("Northwind Goods – Coastal Streetwear | Shop");
-    expect(meta.description).toBe("Heavyweight hoodies, caps & waxed jackets made for the harbour.");
+    expect(meta.description).toBe(`Heavyweight hoodies, caps & waxed jackets made for the harbour. ${INJECTION_IN_META}`);
     expect(meta.siteName).toBe("Northwind Goods");
     expect(meta.ogImage).toBe("https://cdn.shopify.com/s/files/1/0001/og-hero.jpg");
     expect(meta.themeColor).toBe("#0b2545");
@@ -163,8 +163,10 @@ describe("parseHomepage", () => {
     expect(new Set(meta.colorCandidates).size).toBe(meta.colorCandidates.length);
   });
 
-  it("never treats page text as anything but data", () => {
-    expect(JSON.stringify(meta)).not.toContain("Ignore previous instructions");
+  it("keeps page text as inert plain text and never reads the page body", () => {
+    // The meta description is read (it is the store's description), verbatim and as text only.
+    expect(meta.description).toContain(INJECTION_IN_META);
+    expect(JSON.stringify(meta)).not.toContain(INJECTION_IN_BODY);
   });
 
   it("copes with an empty page", () => {

@@ -47,17 +47,27 @@ export async function POST(req: NextRequest) {
 
   const hints = body.data.hints ?? {};
   let result: StructureResult;
-  if (features.ai) {
-    try {
-      result = await structureMerchant(extraction, hints);
-    } catch (err) {
-      const reason = err instanceof StructureError || err instanceof NotConfiguredError ? err.message : "unexpected error";
-      console.error("[api/admin/extract] AI structuring failed:", reason);
+  try {
+    if (features.ai) {
+      try {
+        result = await structureMerchant(extraction, hints);
+      } catch (err) {
+        const reason = err instanceof StructureError || err instanceof NotConfiguredError ? err.message : "unexpected error";
+        console.error("[api/admin/extract] AI structuring failed:", reason);
+        result = structureMerchantHeuristic(extraction, hints);
+        result.warnings.unshift(`AI structuring failed (${reason.split("\n")[0]}); a heuristic proposal was used instead.`);
+      }
+    } else {
       result = structureMerchantHeuristic(extraction, hints);
-      result.warnings.unshift(`AI structuring failed (${reason.split("\n")[0]}); a heuristic proposal was used instead.`);
     }
-  } else {
-    result = structureMerchantHeuristic(extraction, hints);
+  } catch (err) {
+    // The heuristic is the last resort; if even it cannot build a valid proposal, say why.
+    const message = err instanceof StructureError ? err.message : "The store could not be turned into a proposal.";
+    console.error("[api/admin/extract] heuristic structuring failed:", message.split("\n")[0]);
+    return adminError(502, message.split("\n")[0] ?? message, {
+      code: err instanceof StructureError ? err.code : "structure_failed",
+      problems: message.split("\n").slice(1, 21),
+    });
   }
   extraction.meta = {
     proposalSource: result.source,

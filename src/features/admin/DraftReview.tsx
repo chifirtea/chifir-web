@@ -7,7 +7,7 @@ import type { MerchantDraft } from "@/types/domain";
 import type { PlacementsResponse, PublishResponse } from "@/lib/onboarding/api";
 import { asExtraction } from "@/lib/onboarding/types";
 import { AdminApiError, adminApi, type DraftEdits } from "./adminApi";
-import { forApprovalProposal, proposalIssues, reviewChecklist, STATUS_LABEL, type Proposal } from "./editor";
+import { forApprovalProposal, proposalIssues, reviewChecklist, STATUS_LABEL, withoutSponsorship, type Proposal } from "./editor";
 import { EmployeeEditor } from "./EmployeeEditor";
 import { ExtractionPanel } from "./ExtractionPanel";
 import { Section, TextArea } from "./fields";
@@ -68,7 +68,7 @@ export function DraftReview({ draft, onDraft }: { draft: MerchantDraft; onDraft:
   const issues = useMemo(() => proposalIssues(proposal), [proposal]);
   const checklist = useMemo(() => reviewChecklist(proposal, extraction, parcel), [proposal, extraction, parcel]);
 
-  const edits = (): DraftEdits => ({ proposal, placement: placement ?? null, reviewerNotes: notes });
+  const edits = (): DraftEdits => ({ proposal: withoutSponsorship(proposal), placement: placement ?? null, reviewerNotes: notes });
   const adopt = (d: MerchantDraft) => {
     onDraft(d);
     setProposal(d.proposal);
@@ -93,11 +93,13 @@ export function DraftReview({ draft, onDraft }: { draft: MerchantDraft; onDraft:
 
   const approve = () =>
     run("approve", async () => {
-      const body: DraftEdits = { ...edits(), proposal: forApprovalProposal(proposal) };
-      // extracted/rejected → in_review first (the state machine has no shortcut to approved).
+      // extracted/rejected → in_review first (the state machine has no shortcut to approved). That
+      // step saves the full proposal, excluded products included, so if approval is then refused
+      // (a slug taken meanwhile, a parcel gone) nothing the reviewer could re-include is lost.
+      // Only the approving request carries the stripped proposal.
       const reopened = draft.status === "extracted" || draft.status === "rejected";
-      if (reopened) adopt(await adminApi.patchDraft(draft.id, { ...body, status: "in_review" }));
-      adopt(await adminApi.patchDraft(draft.id, reopened ? { status: "approved" } : { ...body, status: "approved" }));
+      if (reopened) adopt(await adminApi.patchDraft(draft.id, { ...edits(), status: "in_review" }));
+      adopt(await adminApi.patchDraft(draft.id, { ...edits(), proposal: withoutSponsorship(forApprovalProposal(proposal)), status: "approved" }));
     });
 
   const reject = () => run("reject", async () => adopt(await adminApi.patchDraft(draft.id, { reviewerNotes: notes, status: "rejected" })));
@@ -187,10 +189,12 @@ function ApprovePanel({
   onReject: () => void;
   onPublish: () => void;
 }) {
-  // Both acknowledgements reset on every edit (the panel is keyed by revision).
+  // All acknowledgements reset on every edit (the panel is keyed by revision).
   const [reviewed, setReviewed] = useState(false);
   const [pricesOk, setPricesOk] = useState(false);
+  const [claimsOk, setClaimsOk] = useState(false);
   const priceFlags = checklist.pricesNotInSource.length;
+  const claimFlags = checklist.claimsNotInSource.length;
   const blockers = [
     ...schemaIssues,
     ...readiness,
@@ -199,7 +203,8 @@ function ApprovePanel({
     ...(checklist.interiorProblem ? [checklist.interiorProblem] : []),
     ...(checklist.noFulfillment ? ["Enable at least one fulfillment channel."] : []),
   ];
-  const canApprove = status !== "published" && blockers.length === 0 && reviewed && (priceFlags === 0 || pricesOk) && !busy;
+  const canApprove =
+    status !== "published" && blockers.length === 0 && reviewed && (priceFlags === 0 || pricesOk) && (claimFlags === 0 || claimsOk) && !busy;
   const canPublish = status === "approved" && !dirty && !busy;
 
   if (status === "published") {
@@ -227,7 +232,14 @@ function ApprovePanel({
             {checklist.included} product{checklist.included === 1 ? "" : "s"} included{checklist.excluded ? `, ${checklist.excluded} excluded (dropped on approval)` : ""}
           </Check>
           <Check ok={priceFlags === 0} warn>
-            {priceFlags === 0 ? "Every price appears in the source catalog" : `${priceFlags} price${priceFlags === 1 ? "" : "s"} not in the source: ${checklist.pricesNotInSource.slice(0, 3).join(", ")}`}
+            {priceFlags === 0
+              ? "Every price, \"was\" price and option price matches that product's source"
+              : `${priceFlags} product${priceFlags === 1 ? "" : "s"} priced differently from the source: ${checklist.pricesNotInSource.slice(0, 3).join(", ")}`}
+          </Check>
+          <Check ok={claimFlags === 0} warn>
+            {claimFlags === 0
+              ? "Descriptions and dietary/allergen claims match the source"
+              : `${claimFlags} product${claimFlags === 1 ? "" : "s"} with claims the source does not make: ${checklist.claimsNotInSource.slice(0, 3).join(", ")}`}
           </Check>
           <Check ok={checklist.placementChosen && !checklist.templateProblem}>{checklist.placementChosen ? checklist.templateProblem ?? "Placement fits the storefront template" : "No placement yet"}</Check>
           <Check ok={checklist.platformRulesKept}>Employee keeps the platform rules (no medical claims, no invented prices)</Check>
@@ -267,10 +279,23 @@ function ApprovePanel({
           </label>
           {priceFlags ? (
             <label className="flex min-h-11 cursor-pointer items-start gap-3 text-[14px]">
-              <input type="checkbox" className="mt-0.5 h-5 w-5 shrink-0 accent-[var(--color-sodium)]" checked={pricesOk} onChange={(e) => setPricesOk(e.target.checked)} />
+              <input type="checkbox" className="mt-0.5 h-5 w-5 shrink-0 accent-[var(--color-sodium)]" checked={pricesOk} onChange={(e) => setPricesOk(e.target.checked)} data-testid="prices-confirm" />
               <span>
-                <span className="font-medium text-sodium">I confirmed the {priceFlags} price{priceFlags === 1 ? "" : "s"} that differ from the source</span>
+                <span className="font-medium text-sodium">
+                  I confirmed the prices of the {priceFlags} product{priceFlags === 1 ? "" : "s"} that differ from the source
+                </span>
                 <span className="block text-[12px] text-fog-3">Customers will pay these prices.</span>
+              </span>
+            </label>
+          ) : null}
+          {claimFlags ? (
+            <label className="flex min-h-11 cursor-pointer items-start gap-3 text-[14px]">
+              <input type="checkbox" className="mt-0.5 h-5 w-5 shrink-0 accent-[var(--color-sodium)]" checked={claimsOk} onChange={(e) => setClaimsOk(e.target.checked)} data-testid="claims-confirm" />
+              <span>
+                <span className="font-medium text-sodium">
+                  I confirmed the claims of the {claimFlags} product{claimFlags === 1 ? "" : "s"} that the source does not make
+                </span>
+                <span className="block text-[12px] text-fog-3">Descriptions, dietary tags and allergens are shown to customers and relied on.</span>
               </span>
             </label>
           ) : null}

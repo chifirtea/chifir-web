@@ -13,9 +13,9 @@ import {
   priceCheck,
   proposalIssues,
   reviewChecklist,
-  sourcePriceSet,
   toggleChannel,
   variantSummary,
+  withoutSponsorship,
 } from "./editor";
 
 const extraction: Extraction = {
@@ -72,15 +72,61 @@ describe("approval helpers", () => {
   });
 
   it("flags prices that are not in the source", () => {
-    const prices = sourcePriceSet(extraction);
     const edited = { ...proposal, products: proposal.products.map((p, i) => (i === 0 ? { ...p, priceCents: 5900 } : p)) };
-    expect(priceCheck(edited.products[0]!, extraction, prices)).toEqual({ sourceCents: 6800, notInSource: true });
-    expect(priceCheck(edited.products[1]!, extraction, prices)).toEqual({ sourceCents: 3200, notInSource: false });
+    const hoodie = priceCheck(edited.products[0]!, extraction);
+    expect(hoodie).toMatchObject({ sourceCents: 6800, sourceCompareAtCents: 8500, notInSource: true });
+    expect(hoodie.price[0]).toBe("$59.00 is not a source price for this product ($68.00, $72.00).");
+    expect(priceCheck(edited.products[1]!, extraction)).toMatchObject({ sourceCents: 3200, notInSource: false, price: [], claims: [] });
     const list = reviewChecklist(edited, extraction, { tier: "standard" });
     expect(list.pricesNotInSource).toEqual(["Harbor Hoodie"]);
+    expect(list.claimsNotInSource).toEqual([]);
     expect(list.templateProblem).toBeNull();
     expect(reviewChecklist(edited, extraction, { tier: "kiosk" }).templateProblem).toMatch(/kiosk/);
     expect(reviewChecklist(edited, extraction, undefined).placementChosen).toBe(false);
+  });
+
+  it("flags a price borrowed from another product (it is in the catalog, but not this product's)", () => {
+    const swapped = { ...proposal, products: proposal.products.map((p, i) => (i === 0 ? { ...p, priceCents: 3200 } : p)) };
+    expect(priceCheck(swapped.products[0]!, extraction).notInSource).toBe(true);
+    expect(reviewChecklist(swapped, extraction, { tier: "standard" }).pricesNotInSource).toEqual(["Harbor Hoodie"]);
+  });
+
+  it("flags was-prices, option prices and claims the source does not make", () => {
+    const cap = proposal.products[1]!;
+    const steered = {
+      ...cap,
+      compareAtPriceCents: 4800,
+      description: "Clinically shown to lower cholesterol.",
+      attributes: { dietary: ["vegan" as const], allergens: ["peanuts"], calories: 90 },
+      variantGroups: [{ id: "size", name: "Size", required: true, options: [{ id: "xl", name: "XL", priceDeltaCents: 500 }] }],
+    };
+    const check = priceCheck(steered, extraction);
+    expect(check.price).toEqual([
+      '"Was" price $48.00 is not a compare-at price the source lists.',
+      'Options: "XL" is not a variant the source sells.',
+    ]);
+    expect(check.claims).toEqual([
+      "Description differs from the source.",
+      "Dietary claims the source does not make: vegan.",
+      "Allergens the source does not mention: peanuts.",
+      "90 kcal is not stated in the source.",
+    ]);
+    const list = reviewChecklist({ ...proposal, products: [proposal.products[0]!, steered] }, extraction, { tier: "standard" });
+    expect(list.pricesNotInSource).toEqual(["Dockside Cap"]);
+    expect(list.claimsNotInSource).toEqual(["Dockside Cap"]);
+  });
+
+  it("flags products it cannot match to the source, and ignores excluded ones", () => {
+    const stray = { ...proposal.products[1]!, slug: "mystery", title: "Mystery Box" };
+    expect(priceCheck(stray, extraction).price).toEqual(["Not matched to a product in the source catalog."]);
+    const excluded = { ...proposal, products: [...proposal.products, { ...stray, active: false }] };
+    expect(reviewChecklist(excluded, extraction, { tier: "standard" }).pricesNotInSource).toEqual([]);
+  });
+
+  it("never sends sponsorship", () => {
+    const legacy = { ...proposal, merchant: { ...proposal.merchant, sponsored: true } };
+    expect(withoutSponsorship(legacy).merchant.sponsored).toBe(false);
+    expect(withoutSponsorship(proposal)).toBe(proposal);
   });
 });
 
