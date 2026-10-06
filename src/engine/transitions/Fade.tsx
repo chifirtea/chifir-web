@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, type CSSProperties } from "react";
+import { getCityIndex } from "@/city/cityStore";
 import { useWorldStore } from "@/engine/store/worldStore";
 
 const OUT_MS = 260;
@@ -21,6 +22,31 @@ const style: CSSProperties = {
 const easeIn = (t: number) => t * t;
 const easeOut = (t: number) => 1 - (1 - t) * (1 - t);
 
+const markStyle: CSSProperties = {
+  position: "absolute",
+  inset: 0,
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "center",
+  textAlign: "center",
+  padding: "0 24px",
+  fontFamily: "var(--font-display, inherit)",
+  letterSpacing: "-0.02em",
+  opacity: 0,
+  transition: "opacity 160ms ease-out",
+};
+
+/** The brand the pending transition walks into, if it is a room: its colours dress the fade. */
+function pendingBrand(): { color: string; name: string; onColor: string } | null {
+  const pending = useWorldStore.getState().pending;
+  const index = getCityIndex();
+  if (!pending?.location || pending.location.kind !== "interior" || !index) return null;
+  const merchant = index.merchantsById[pending.location.merchantId];
+  if (!merchant) return null;
+  return { color: merchant.brand.primary, name: merchant.name, onColor: merchant.brand.onPrimary };
+}
+
 /**
  * Full-screen fade that drives the world store's transition state machine: fade to black,
  * commit (move the player / switch location), fade back in. Opacity is written straight to the
@@ -28,6 +54,7 @@ const easeOut = (t: number) => 1 - (1 - t) * (1 - t);
  */
 export function Fade() {
   const ref = useRef<HTMLDivElement>(null);
+  const mark = useRef<HTMLDivElement>(null);
   const opacity = useRef(0);
   const transitionId = useWorldStore((s) => s.transitionId);
 
@@ -47,9 +74,19 @@ export function Fade() {
 
     let raf = 0;
     let finished = false;
+    // Walking into a store fades through the brand colour with its name; everything else is night.
+    const brand = pendingBrand();
+    el.style.background = brand ? brand.color : "var(--color-night)";
+    const m = mark.current;
+    if (m) {
+      m.textContent = brand ? brand.name : "";
+      m.style.color = brand ? brand.onColor : "transparent";
+      m.style.opacity = "0";
+    }
     const setOpacity = (o: number) => {
       opacity.current = o;
       el.style.opacity = String(o);
+      if (m) m.style.opacity = brand && o > 0.6 ? String(Math.min(1, (o - 0.6) / 0.4)) : "0";
     };
     const commit = () => {
       const pending = useWorldStore.getState().commitTransition();
@@ -118,5 +155,9 @@ export function Fade() {
     };
   }, [transitionId]);
 
-  return <div ref={ref} style={style} aria-hidden="true" />;
+  return (
+    <div ref={ref} style={style} aria-hidden="true">
+      <div ref={mark} style={markStyle} className="text-3xl font-semibold" />
+    </div>
+  );
 }

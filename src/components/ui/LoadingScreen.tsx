@@ -5,9 +5,11 @@ import { cn } from "@/lib/utils/cn";
 import styles from "./LoadingScreen.module.css";
 
 const TIPS = [
+  "Walk in. Something is happening tonight.",
   "Walk into any store to see the menu",
   "Ask the concierge for anything under a budget",
   "Every promotion in the city is a real one",
+  "Invite a friend and explore together",
   "Tonight's events are under Places",
 ];
 
