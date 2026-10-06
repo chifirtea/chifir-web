@@ -316,6 +316,32 @@ describe("payment and completion", () => {
     expect(done.fulfillments[0]?.status).toBe("delivered");
   });
 
+  it("records purchase_completed and event_participated for a ticket order", async () => {
+    const { order } = await createCheckoutOrder(
+      {
+        body: body({
+          lines: [{ productId: TICKET, quantity: 1 }],
+          fulfillment: [{ merchantId: HALL, type: "ticket" }],
+        }),
+      },
+      ds,
+    );
+    const recorded = vi.spyOn(ds, "recordAnalytics");
+    const paid = (await ds.markOrderPaid(order.id, { paidAt: new Date().toISOString() }))!;
+    await completeOrder(paid, ds);
+    const names = recorded.mock.calls.flatMap(([records]) => records.map((r) => r.name));
+    expect(names).toContain("purchase_completed");
+    expect(names).toContain("event_participated");
+    expect(names).not.toContain("drop_purchased");
+    const participated = recorded.mock.calls
+      .flatMap(([records]) => records)
+      .find((r) => r.name === "event_participated");
+    expect(participated?.props).toEqual({
+      eventId: sid.event("friday-live-set"),
+      kind: "ticket_purchased",
+    });
+  });
+
   it("leaves unpaid orders untouched on refresh", async () => {
     const { order } = await createCheckoutOrder({ body: mixedCart() }, ds);
     expect(await refreshOrderStatus(order, new Date(Date.now() + 10_000_000), ds)).toBe(order);
