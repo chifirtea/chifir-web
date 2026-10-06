@@ -65,7 +65,7 @@ export function usePresence(): void {
     const onVisibility = () => {
       if (document.visibilityState === "visible") controller.nudge();
     };
-    const onPageHide = () => controller.dispose();
+    const onPageHide = () => controller.suspend();
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("pagehide", onPageHide);
 

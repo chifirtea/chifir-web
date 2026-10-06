@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DESPAWN_MS } from "./interpolation";
-import { selectPartyMemberCount, selectRoomCount, usePresenceStore } from "./presenceStore";
+import { MEMBERSHIP_GRACE_MS, selectPartyMemberCount, selectRoomCount, usePresenceStore } from "./presenceStore";
 import { MAX_PACKETS_PER_SECOND, type PresencePacket } from "./transport";
 
 const packet = (id: string, overrides: Partial<PresencePacket> = {}): PresencePacket => ({
@@ -82,7 +82,10 @@ describe("presence store", () => {
     s.applyPacket(packet("c", { t: t0 }), t0);
     s.removePeer("a");
     expect(Object.keys(usePresenceStore.getState().peers).sort()).toEqual(["b", "c"]);
-    s.retainPeers(["c", "zzz"]);
+    // A membership snapshot that does not list a peer yet keeps it while its packets are fresh.
+    s.retainPeers(["c", "zzz"], t0 + 100);
+    expect(Object.keys(usePresenceStore.getState().peers).sort()).toEqual(["b", "c"]);
+    s.retainPeers(["c", "zzz"], t0 + MEMBERSHIP_GRACE_MS + 1);
     expect(Object.keys(usePresenceStore.getState().peers)).toEqual(["c"]);
 
     vi.advanceTimersByTime(DESPAWN_MS - 10);

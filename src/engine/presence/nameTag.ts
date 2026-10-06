@@ -32,18 +32,17 @@ function draw(name: string, party: boolean): CanvasTexture | null {
   const ctx = canvas.getContext("2d");
   if (!ctx) return null;
   ctx.clearRect(0, 0, WIDTH, HEIGHT);
-  ctx.font = `600 34px "Inter", "Helvetica Neue", Arial, sans-serif`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  const textWidth = Math.min(WIDTH - 24, ctx.measureText(name).width);
-  const pillW = textWidth + 40;
+  const label = fitLabel(ctx, name);
+  const textWidth = ctx.measureText(label).width;
+  const pillW = Math.min(WIDTH - 4, textWidth + 40);
   const pillH = 56;
   const x = (WIDTH - pillW) / 2;
   const y = 8;
   // Pill.
   ctx.fillStyle = INK;
-  ctx.beginPath();
-  ctx.roundRect(x, y, pillW, pillH, pillH / 2);
+  pillPath(ctx, x, y, pillW, pillH);
   ctx.fill();
   if (party) {
     ctx.strokeStyle = PARTY_COLOR;
@@ -56,7 +55,7 @@ function draw(name: string, party: boolean): CanvasTexture | null {
   ctx.rect(x + 12, y, pillW - 24, pillH);
   ctx.clip();
   ctx.fillStyle = FOG;
-  ctx.fillText(name, WIDTH / 2, y + pillH / 2 + 1);
+  ctx.fillText(label, WIDTH / 2, y + pillH / 2 + 1);
   ctx.restore();
   // Chevron under the pill pointing at the head; party members get the sodium accent.
   ctx.fillStyle = party ? PARTY_COLOR : NEUTRAL_CHEVRON;
@@ -71,6 +70,32 @@ function draw(name: string, party: boolean): CanvasTexture | null {
   texture.colorSpace = SRGBColorSpace;
   texture.anisotropy = 2;
   return texture;
+}
+
+const FONT = `"Inter", "Helvetica Neue", Arial, sans-serif`;
+const MAX_TEXT_W = WIDTH - 48;
+
+/** Sets the largest font (34 → 22 px) that fits the name, then ellipsises whatever still does not. */
+function fitLabel(ctx: CanvasRenderingContext2D, name: string): string {
+  for (let size = 34; size >= 22; size -= 4) {
+    ctx.font = `600 ${size}px ${FONT}`;
+    if (ctx.measureText(name).width <= MAX_TEXT_W) return name;
+  }
+  let label = name;
+  while (label.length > 1 && ctx.measureText(`${label}…`).width > MAX_TEXT_W) label = label.slice(0, -1);
+  return `${label.trimEnd()}…`;
+}
+
+/** Stadium path; built from arcs because `roundRect` is missing on older mobile Safari. */
+function pillPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number): void {
+  const r = h / 2;
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.arc(x + w - r, y + r, r, -Math.PI / 2, Math.PI / 2);
+  ctx.lineTo(x + r, y + h);
+  ctx.arc(x + r, y + r, r, Math.PI / 2, (Math.PI * 3) / 2);
+  ctx.closePath();
 }
 
 export function acquireNameTag(name: string, party: boolean): SpriteMaterial | null {

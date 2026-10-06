@@ -36,8 +36,11 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
   const ds = getDataSource();
   const draft = await ds.getMerchantDraft(id);
   if (!draft) return adminError(404, "Not found");
-  const parcels = await ds.listParcels();
-  const outcome = applyDraftPatch(draft, body.data, { parcels });
+  const [parcels, merchants] = await Promise.all([ds.listParcels(), ds.listMerchants()]);
+  const outcome = applyDraftPatch(draft, body.data, {
+    parcels,
+    merchantSlugs: new Set(merchants.map((m) => m.slug)),
+  });
   if (!outcome.ok) {
     return adminError(outcome.status, outcome.error, outcome.problems ? { problems: outcome.problems } : {});
   }

@@ -12,8 +12,9 @@ import { isFreeParcel, placementProblem } from "./placement";
 /**
  * Applies a reviewer's edit to a draft (ADR-007). Pure so the rules are unit-tested without Next:
  * status transitions, placement checks, and the approval gate (placement on a free, fitting
- * parcel, at least one product, the whole proposal re-validated). Editing an approved draft
- * reopens it unless the same request approves it again.
+ * parcel, at least one product, the whole proposal re-validated, a slug no live merchant uses).
+ * Any edit moves an `extracted` draft into review; editing an approved draft reopens it unless the
+ * same request approves it again.
  */
 
 export type PatchOutcome =
@@ -23,7 +24,7 @@ export type PatchOutcome =
 export function applyDraftPatch(
   draft: MerchantDraft,
   patch: DraftPatch,
-  ctx: { parcels: readonly Parcel[] },
+  ctx: { parcels: readonly Parcel[]; merchantSlugs?: ReadonlySet<string> },
 ): PatchOutcome {
   if (draft.status === "published") {
     return { ok: false, status: 409, error: "This draft was published and can no longer be edited." };
@@ -45,9 +46,11 @@ export function applyDraftPatch(
 
   const requested = patch.status;
   if (requested && !canTransition(draft.status, requested)) {
-    return { ok: false, status: 409, error: `A ${label(draft.status)} draft cannot become ${label(requested)}.` };
+    const from = label(draft.status);
+    return { ok: false, status: 409, error: `${/^[aeiou]/.test(from) ? "An" : "A"} ${from} draft cannot become ${label(requested)}.` };
   }
-  const status = requested ?? (edits && draft.status === "approved" ? "in_review" : draft.status);
+  const reopened = edits && (draft.status === "approved" || draft.status === "extracted");
+  const status = requested ?? (reopened ? "in_review" : draft.status);
 
   if (status === "approved") {
     const parsed = merchantProposalSchema.safeParse(proposal);
@@ -60,6 +63,9 @@ export function applyDraftPatch(
       };
     }
     const problems = proposalProblems(parsed.data);
+    if (ctx.merchantSlugs?.has(parsed.data.merchant.slug)) {
+      problems.push(`The slug "${parsed.data.merchant.slug}" is already used by a merchant in the city.`);
+    }
     if (!placement) problems.push("Choose a district and a parcel.");
     else {
       const parcel = ctx.parcels.find((p) => p.id === placement?.parcelId);
@@ -72,10 +78,14 @@ export function applyDraftPatch(
     if (problems.length) return { ok: false, status: 422, error: "Not ready to approve.", problems };
   }
 
+  // Spread without the optional fields this patch may clear, so `placement: null` sticks.
+  const { placement: _oldPlacement, reviewerNotes: _oldNotes, ...rest } = draft;
+  void _oldPlacement;
+  void _oldNotes;
   return {
     ok: true,
     next: {
-      ...draft,
+      ...rest,
       proposal,
       status,
       ...(placement ? { placement } : {}),

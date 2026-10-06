@@ -1,4 +1,4 @@
-import type { District, MerchantDraft } from "@/types/domain";
+import type { District, MerchantDraft, Parcel } from "@/types/domain";
 import type { PlacementOption } from "./placement";
 
 /**
@@ -21,9 +21,15 @@ export interface DraftListResponse {
   drafts: MerchantDraft[];
 }
 
+/** Just enough of an occupied or reserved lot to draw it on the placement map. */
+export type ParcelOutline = Pick<Parcel, "id" | "districtId" | "slug" | "position" | "rotationY" | "size" | "tier">;
+
 export interface PlacementsResponse {
   districts: District[];
+  /** Free lots, each flagged with whether the draft's stored template fits it. */
   parcels: PlacementOption[];
+  /** Every other lot (tenanted, reserved, billboards), for context on the map. */
+  taken: ParcelOutline[];
   suggestedDistrictId?: string;
 }
 

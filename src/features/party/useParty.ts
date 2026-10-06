@@ -6,12 +6,15 @@ import { getCityIndex, useCityStore } from "@/city/cityStore";
 import type { CityIndex } from "@/city/cityIndex";
 import { distance2D } from "@/city/navigation";
 import { isInteriorZ } from "@/engine/interior/types";
+import { getColliders, type ColliderScope } from "@/engine/physics/colliderStore";
+import { resolveCircleAABB } from "@/engine/physics/collision";
+import { PLAYER_RADIUS } from "@/engine/player/PlayerController";
 import { playerRig } from "@/engine/player/playerRig";
 import { useWorldStore } from "@/engine/store/worldStore";
 import { track } from "@/lib/analytics/client";
 import { usePresenceStore, type PartyPeer } from "@/lib/presence/presenceStore";
 import { parseRoom } from "@/lib/presence/rooms";
-import { PARTY_QUERY_PARAM, parsePartyCode, poseBehind } from "./partyLink";
+import { PARTY_QUERY_PARAM, parsePartyCode, spawnNear } from "./partyLink";
 import { usePartyStore } from "./partyStore";
 
 /** How long a joiner waits for a member's packet before settling for the deep link's spot. */
@@ -24,6 +27,12 @@ const TRANSITION_WAIT_MS = 4000;
 function firstMember(): PartyPeer | null {
   const peers = Object.values(usePresenceStore.getState().partyPeers);
   return peers.sort((a, b) => b.lastSeen - a.lastSeen)[0] ?? null;
+}
+
+/** A spot near the member that is not inside a wall of the given layer's colliders. */
+function spawnBeside(member: PartyPeer, scope: ColliderScope) {
+  const colliders = getColliders(scope);
+  return spawnNear(member, (x, z) => resolveCircleAABB(x, z, PLAYER_RADIUS, colliders).hits.length === 0);
 }
 
 /** Resolves when the world transition is idle again (or after a timeout). */
@@ -47,18 +56,18 @@ function afterTransition(): Promise<void> {
 }
 
 /**
- * Moves the player next to a party member: on the street a straight teleport 2 m behind them;
- * indoors, enter their room (then step beside them once inside). Returns whether a move started.
+ * Moves the player next to a party member: on the street a teleport to just behind them (see
+ * `spawnNear`); indoors, enter their room, then step beside them once inside. Returns whether a
+ * move started.
  */
 export function goToPartyMember(member: PartyPeer, index: CityIndex): boolean {
   const my = useWorldStore.getState().location;
   const room = member.room ? parseRoom(member.room) : null;
-  const target = poseBehind(member);
 
   if (room?.kind === "interior") {
     const parcel = index.parcelsById[room.id];
     if (!parcel?.merchantId) return false;
-    if (my.kind === "interior" && my.parcelId === parcel.id) return teleportToPose(target, "party", my);
+    if (my.kind === "interior" && my.parcelId === parcel.id) return teleportToPose(spawnBeside(member, "interior"), "party", my);
     const merchantId = parcel.merchantId;
     const ok = enterMerchant(merchantId, "teleport", parcel.id);
     if (ok) {
@@ -67,17 +76,19 @@ export function goToPartyMember(member: PartyPeer, index: CityIndex): boolean {
         const world = useWorldStore.getState();
         if (world.location.kind !== "interior" || world.location.parcelId !== parcel.id) return;
         if (distance2D(playerRig, fresh) <= NEAR_INDOORS_M) return;
-        teleportToPose(poseBehind(fresh), "party", world.location);
+        teleportToPose(spawnBeside(fresh, "interior"), "party", world.location);
       });
     }
     return ok;
   }
 
   // No room reported: the packet came from our own room, so stay in it.
-  if (!room && my.kind === "interior") return teleportToPose(target, "party", my);
+  if (!room && my.kind === "interior") return teleportToPose(spawnBeside(member, "interior"), "party", my);
   // A street member must be on the street layer; an interior coordinate with a street room is stale.
   if (isInteriorZ(member.z)) return false;
-  return teleportToPose(target, "party");
+  // From indoors the street colliders are not registered yet (any spot passes); the controller
+  // pushes the player out of anything it lands in either way.
+  return teleportToPose(spawnBeside(member, "street"), "party");
 }
 
 /**

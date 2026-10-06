@@ -8,6 +8,8 @@ import {
   parseInviteUrl,
   parsePartyCode,
   poseBehind,
+  SPAWN_BEHIND_M,
+  spawnNear,
 } from "./partyLink";
 
 const CODE = /^[A-Z0-9]{6,12}$/;
@@ -80,15 +82,40 @@ describe("inviteTargetFor", () => {
 });
 
 describe("poseBehind", () => {
-  it("stands 2 m behind the member, facing the same way", () => {
-    // yaw 0 faces +Z, so "behind" is -Z.
-    const behind = poseBehind({ x: 0, z: 0, yaw: 0 });
-    expect(behind.x).toBeCloseTo(0);
-    expect(behind.z).toBeCloseTo(-2);
-    expect(behind.yaw).toBe(0);
-    const p = poseBehind({ x: 10, z: 5, yaw: Math.PI / 2 }); // facing +X
+  it("stands behind the member, a step to their right, facing the same way", () => {
+    // yaw 0 faces +Z, so "behind" is -Z and "right" is -X.
+    const straight = poseBehind({ x: 0, z: 0, yaw: 0 }, 2, 0);
+    expect(straight.x).toBeCloseTo(0);
+    expect(straight.z).toBeCloseTo(-2);
+    expect(straight.yaw).toBe(0);
+    const aside = poseBehind({ x: 0, z: 0, yaw: 0 });
+    expect(aside.x).toBeCloseTo(-1);
+    expect(aside.z).toBeCloseTo(-SPAWN_BEHIND_M);
+    const p = poseBehind({ x: 10, z: 5, yaw: Math.PI / 2 }, 2, 1); // facing +X, right is +Z
     expect(p.x).toBeCloseTo(8);
-    expect(p.z).toBeCloseTo(5);
+    expect(p.z).toBeCloseTo(6);
     expect(p.yaw).toBe(Math.PI / 2);
+  });
+});
+
+describe("spawnNear", () => {
+  const member = { x: 0, z: 0, yaw: 0 };
+
+  it("prefers just behind and aside, within a few metres of the member", () => {
+    const pose = spawnNear(member);
+    expect(pose).toEqual(poseBehind(member));
+    expect(Math.hypot(pose.x - member.x, pose.z - member.z)).toBeLessThan(3);
+  });
+
+  it("skips blocked spots (a member with their back to a wall)", () => {
+    // Everything behind the member (z < -0.5) is a wall.
+    const pose = spawnNear(member, (_x, z) => z > -0.5);
+    expect(pose.z).toBeGreaterThan(-0.5);
+    expect(Math.hypot(pose.x, pose.z)).toBeLessThan(3);
+    expect(pose.yaw).toBe(0);
+  });
+
+  it("falls back to the default spot when everything is blocked", () => {
+    expect(spawnNear(member, () => false)).toEqual(poseBehind(member));
   });
 });

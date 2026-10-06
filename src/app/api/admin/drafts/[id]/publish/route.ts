@@ -18,9 +18,13 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   const ds = getDataSource();
   const draft = await ds.getMerchantDraft(id);
   if (!draft) return adminError(404, "Not found");
+  // Slugs are how the city deep-links (`/city?to=<slug>`); the data layer does not check them.
+  const slug = draft.proposal.merchant.slug;
+  if (draft.status !== "published" && (await ds.getMerchantBySlug(slug))) {
+    return adminError(409, `The slug "${slug}" is already used by a merchant in the city.`);
+  }
   try {
     const { merchantId } = await ds.publishMerchantDraft(id);
-    const slug = draft.proposal.merchant.slug;
     return adminJson<PublishResponse>({ merchantId, slug, cityUrl: `/city?to=${encodeURIComponent(slug)}` });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Could not publish this draft.";

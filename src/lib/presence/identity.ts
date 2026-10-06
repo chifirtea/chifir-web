@@ -5,10 +5,13 @@
 
 export const PEER_ID_STORAGE_KEY = "chifir.peer.v1";
 
-/** Muted, contemporary tones; shared with the ambient walkers' palette in spirit, not code. */
+/**
+ * Muted, contemporary mid-tones: light enough to read against night asphalt at a distance, never
+ * neon. Hair stays dark-to-warm. Indexed by a hash of the peer id so a tab keeps its look.
+ */
 export const PEER_BODY_COLORS = [
-  "#8a5a44", "#2f3e5c", "#5c3a4a", "#3d5a4a", "#6b6b78", "#a0522d", "#7a6a52", "#4a3f6b",
-  "#c46a3a", "#1f5f5b", "#b23a48", "#4f6d7a", "#d9b26f", "#3b2f2f", "#2b6ca3", "#8c6d31",
+  "#4f86f7", "#c46a3a", "#2b8a82", "#b8485a", "#d9b26f", "#6f9a54", "#8a74c9", "#e07b5f",
+  "#5f9eb8", "#c9a23a", "#a86a4a", "#7f93ad", "#c86f9a", "#8fae6a", "#d8d2c4", "#4a7fc0",
 ] as const;
 
 export const PEER_HAIR_COLORS = ["#1a120e", "#3b2416", "#6b4a2a", "#0e0e10", "#8a7a68", "#a8532c"] as const;
@@ -68,8 +71,15 @@ export function fallbackName(peerId: string): string {
   return `Citizen ${tag}`;
 }
 
-/** Trims a chosen display name to what a packet carries; falls back when empty. */
+/** Anything shaped like an email address; such a "name" is never put on the wire. */
+const EMAIL_LIKE = /\S+@\S+\.\S+/;
+
+/**
+ * Trims a chosen display name to what a packet carries; falls back to "Citizen XYZ" when it is
+ * empty or looks like an email (some people type theirs as a display name).
+ */
 export function displayNameFor(peerId: string, chosen: string | null | undefined, max: number): string {
-  const clean = (chosen ?? "").replace(/[\u0000-\u001f\u007f]/g, "").trim().slice(0, max);
-  return clean || fallbackName(peerId);
+  const clean = (chosen ?? "").replace(/[\u0000-\u001f\u007f]/g, "").trim();
+  if (!clean || EMAIL_LIKE.test(clean)) return fallbackName(peerId);
+  return clean.slice(0, max).trim();
 }

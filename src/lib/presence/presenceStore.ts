@@ -80,14 +80,20 @@ export interface PresenceState {
   applyPartyPacket: (packet: PresencePacket, now: number) => boolean;
   removePeer: (peerId: string) => void;
   removePartyPeer: (peerId: string) => void;
-  /** Membership snapshot from an authoritative source: drop anyone not listed. */
-  retainPeers: (peerIds: readonly string[]) => void;
-  retainPartyPeers: (peerIds: readonly string[]) => void;
+  /**
+   * Membership snapshot from an authoritative source: drop anyone not listed, except peers heard
+   * within `MEMBERSHIP_GRACE_MS` (their first packet can beat their presence join to us).
+   */
+  retainPeers: (peerIds: readonly string[], now: number) => void;
+  retainPartyPeers: (peerIds: readonly string[], now: number) => void;
   /** Despawns peers silent for longer than DESPAWN_MS. Returns the removed ids. */
   prune: (now: number) => string[];
   clearPeers: () => void;
   clearPartyPeers: () => void;
 }
+
+/** A peer heard this recently survives a membership snapshot that does not list it yet. */
+export const MEMBERSHIP_GRACE_MS = 2000;
 
 const DEFAULT_IDENTITY: Identity = {
   peerId: "",
@@ -211,19 +217,23 @@ export const usePresenceStore = create<PresenceState>((set, get) => ({
     set({ partyPeers: next });
   },
 
-  retainPeers: (peerIds) => {
+  retainPeers: (peerIds, now) => {
     const { peers } = get();
     const keep = new Set(peerIds);
-    const gone = Object.keys(peers).filter((id) => !keep.has(id));
+    const gone = Object.values(peers)
+      .filter((p) => !keep.has(p.id) && now - p.lastSeen > MEMBERSHIP_GRACE_MS)
+      .map((p) => p.id);
     if (gone.length === 0) return;
     const next = { ...peers };
     for (const id of gone) delete next[id];
     set({ peers: next });
   },
-  retainPartyPeers: (peerIds) => {
+  retainPartyPeers: (peerIds, now) => {
     const { partyPeers } = get();
     const keep = new Set(peerIds);
-    const gone = Object.keys(partyPeers).filter((id) => !keep.has(id));
+    const gone = Object.values(partyPeers)
+      .filter((p) => !keep.has(p.id) && now - p.lastSeen > MEMBERSHIP_GRACE_MS)
+      .map((p) => p.id);
     if (gone.length === 0) return;
     const next = { ...partyPeers };
     for (const id of gone) delete next[id];

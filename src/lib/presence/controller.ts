@@ -179,6 +179,15 @@ export class PresenceController {
     this.closeParty();
   }
 
+  /**
+   * Leaves every room but keeps ticking: the next tick rejoins. For `pagehide`, so peers drop us
+   * at once, and a page restored from the back/forward cache comes back without a remount.
+   */
+  suspend(): void {
+    this.closeRoom();
+    this.closeParty();
+  }
+
   /** Re-announce on both channels (tab became visible again). */
   nudge(): void {
     if (this.roomSession) this.roomSession.force = true;
@@ -239,9 +248,11 @@ export class PresenceController {
       onJoin: () => {
         session.force = true;
       },
-      onLeave: (id) => store.removePeer(id),
+      onLeave: (id) => {
+        if (!session.disposed) store.removePeer(id);
+      },
       onMembers: (ids) => {
-        if (!session.disposed) store.retainPeers(ids);
+        if (!session.disposed) store.retainPeers(ids, this.deps.now());
       },
     };
     void this.deps.connect(room, meta, handlers).then(
@@ -284,9 +295,11 @@ export class PresenceController {
       onJoin: () => {
         session.force = true;
       },
-      onLeave: (id) => store.removePartyPeer(id),
+      onLeave: (id) => {
+        if (!session.disposed) store.removePartyPeer(id);
+      },
       onMembers: (ids) => {
-        if (!session.disposed) store.retainPartyPeers(ids);
+        if (!session.disposed) store.retainPartyPeers(ids, this.deps.now());
       },
     };
     void this.deps.connect(room, meta, handlers).then(

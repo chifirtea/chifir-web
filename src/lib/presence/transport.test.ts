@@ -29,7 +29,9 @@ describe("presence packet codec", () => {
   });
 
   it("accepts the minimal packet (no outfit, no party, no room)", () => {
-    const { o: _o, p: _p, ...minimal } = valid;
+    const minimal: PresencePacket = { ...valid };
+    delete minimal.o;
+    delete minimal.p;
     expect(decodePacket(minimal)).toEqual(minimal);
   });
 

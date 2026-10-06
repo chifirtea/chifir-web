@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PresenceController, type TickInput } from "./controller";
-import { usePresenceStore, type Identity } from "./presenceStore";
+import { MEMBERSHIP_GRACE_MS, usePresenceStore, type Identity } from "./presenceStore";
 import type { PeerMeta, PresencePacket, PresenceTransport, TransportHandlers, TransportKind } from "./transport";
 
 class FakeTransport implements PresenceTransport {
@@ -179,6 +179,10 @@ describe("PresenceController", () => {
     expect(Object.keys(usePresenceStore.getState().peers).sort()).toEqual(["a", "b"]);
     h.onLeave("a");
     expect(Object.keys(usePresenceStore.getState().peers)).toEqual(["b"]);
+    // Membership that does not list a peer drops it once its packets are no longer fresh.
+    h.onMembers?.([]);
+    expect(Object.keys(usePresenceStore.getState().peers)).toEqual(["b"]);
+    vi.advanceTimersByTime(MEMBERSHIP_GRACE_MS + 1);
     h.onMembers?.([]);
     expect(usePresenceStore.getState().peers).toEqual({});
   });
@@ -231,6 +235,18 @@ describe("PresenceController", () => {
     resolveJoin!(late);
     await flush();
     expect(late.left).toBe(true);
+  });
+
+  it("suspends (page hidden for good or cached) and rejoins on the next tick", async () => {
+    controller.tick(input());
+    await flush();
+    controller.suspend();
+    expect(transports[0]!.left).toBe(true);
+    expect(usePresenceStore.getState().room).toBeNull();
+    controller.tick(input());
+    await flush();
+    expect(transports.map((t) => t.room)).toEqual(["district:d1", "district:d1"]);
+    expect(usePresenceStore.getState().room).toBe("district:d1");
   });
 
   it("leaves everything on dispose", async () => {

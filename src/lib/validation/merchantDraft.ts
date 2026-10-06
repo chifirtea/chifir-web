@@ -333,12 +333,15 @@ export const adminSessionSchema = z.strictObject({ token: z.string().min(16).max
 const TRANSITIONS: Record<MerchantDraftStatus, readonly MerchantDraftStatus[]> = {
   extracted: ["in_review", "rejected"],
   in_review: ["in_review", "approved", "rejected"],
-  approved: ["in_review", "rejected"],
+  approved: ["in_review", "approved", "rejected"],
   rejected: ["in_review"],
   published: [],
 };
 
-/** extracted → in_review → approved | rejected; approved/rejected can be reopened; published is final. */
+/**
+ * extracted → in_review → approved | rejected; approved/rejected can be reopened; published is
+ * final. approved → approved is a re-approval of an edited draft (re-validated like the first).
+ */
 export function canTransition(from: MerchantDraftStatus, to: MerchantDraftStatus): boolean {
   return TRANSITIONS[from].includes(to);
 }
