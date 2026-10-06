@@ -43,6 +43,23 @@ export function teleportTo(target: NavTarget, source: "ai" | "hud" | "deep_link"
   return ok;
 }
 
+/**
+ * Moves the player to an exact pose with the same fade as `teleportTo` (party links: spawn next
+ * to the inviter, "Go to" a member). `location` defaults to the street; a caller inside a room
+ * passes its own location to stay in it. Party moves are reported by `party_joined`, not
+ * `teleport`, so `source` documents the intent until the catalog grows a party source.
+ */
+export function teleportToPose(
+  pose: PlayerPose,
+  source: "party",
+  location: Location = { kind: "street" },
+): boolean {
+  void source;
+  const ok = beginMove(pose, location);
+  if (ok) useWorldStore.getState().setWaypoint(null);
+  return ok;
+}
+
 export function guideTo(target: NavTarget, source: "ai" | "hud"): boolean {
   const index = getCityIndex();
   if (!index) return false;
