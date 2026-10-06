@@ -305,7 +305,9 @@ Everything below reuses the contracts above; nothing merchant-specific entered t
   mandatory human review → `publishMerchantDraft`, which refuses anything not approved.
 - **Measurement.** `lib/perf` marks the load path (User Timing), keeps frame-time percentiles and
   device info; `?perf=1` shows the HUD in any build; `perf_sample` carries the same numbers.
-  Panels and drawers are lazy. See docs/PERFORMANCE.md, docs/ANALYTICS.md, docs/MEDIA.md.
+  Panels, drawers and the Supabase SDK load after the first frame; `/city` first-load JS
+  measures 560 KB gzipped (CI check reads Turbopack's client manifest). See
+  docs/PERFORMANCE.md, docs/ANALYTICS.md, docs/MEDIA.md.
 
 ## 16. Milestone plan (vertical slice)
 
