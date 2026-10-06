@@ -1,6 +1,6 @@
 # Milestone CITY ALIVE v0.2 — implementation plan
 
-Status: in progress. Base: `claude/mvp-vertical-slice` at v0.1 (204 unit tests, 8 smoke tests green).
+Status: in progress (see the PR description for the delivered state). Base: `claude/mvp-vertical-slice` at v0.1 (204 unit tests, 8 smoke tests green).
 
 ## Inspection summary (what v0.1 already gives us)
 
@@ -29,7 +29,7 @@ Status: in progress. Base: `claude/mvp-vertical-slice` at v0.1 (204 unit tests, 
 | `engine/store/worldStore.ts` | Interior location carries `parcelId` (pop-up interiors are keyed by parcel, storefront interiors by the merchant's main parcel) |
 | `lib/commerce/pricing` + checkout | Lines whose product is outside `availableFrom/Until` are problems ("Drops at 8:00 PM"), never priced |
 | `lib/data/types.ts` | `listUserRewards` unchanged; new admin methods `saveMerchantDraft / getMerchantDraft / listMerchantDrafts / publishMerchantDraft`; static + Supabase implementations; migration `0002_city_alive.sql` |
-| Seed | Fictional streetwear brand **VANTA STUDIO** (`vanta-studio`): drop event "VANTA / NIGHT SHIFT" at 20:00 city time (next occurrence), pop-up parcel `es-pop1` on Event Square with tenancy = event window, 4-hoodie collection with `availableFrom` = start and avatar-hoodie rewards, real (transparent) launch offer, capacity metadata, hero media + livestream placeholder |
+| Seed | The existing fictional streetwear brand **Northline Supply** runs the drop "Northline — Night Shift" at 20:00 city time (next occurrence): pop-up parcel `es-pop1` on Event Square with tenancy = event window, a 4-hoodie collection with `availableFrom` = start and avatar-hoodie rewards, a real (transparent) launch offer, capacity metadata, hero media + livestream placeholder. No new merchant, no geographic expansion |
 | Analytics | `session_started, party_created, party_joined, event_joined, drop_product_viewed, drop_purchased` + `docs/ANALYTICS.md` funnel |
 
 ### 1. Workstreams (parallel agents, each owning its files)
