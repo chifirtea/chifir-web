@@ -41,7 +41,8 @@ export function Hud() {
       <div className="flex flex-col gap-3">
         <div className="flex items-start justify-between gap-3">
           <LocationBadge />
-          <div className="flex shrink-0 items-center gap-2">
+          {/* Wraps on narrow phones rather than pushing the cart off screen. */}
+          <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
             <PartyHud className="pointer-events-auto" />
             <PlacesButton />
             <ConciergeButton className="pointer-events-auto" />
@@ -61,7 +62,11 @@ export function Hud() {
         <ControlsHint />
         <InteractionPrompt />
       </div>
-      {ready ? <span data-testid="city-ready" className="sr-only">City ready</span> : null}
+      {ready ? (
+        <span data-testid="city-ready" className="sr-only">
+          City ready
+        </span>
+      ) : null}
     </div>
   );
 }

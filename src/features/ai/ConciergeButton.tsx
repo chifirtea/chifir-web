@@ -19,7 +19,7 @@ export function ConciergeButton({ className }: { className?: string }) {
       aria-label="Ask the city"
       aria-expanded={open}
       className={cn(
-        "group font-display relative inline-flex h-12 min-w-11 select-none items-center gap-2 rounded-full border border-sodium/30 bg-ink-2/90 pr-4 pl-3 text-[15px] font-semibold tracking-tight text-fog shadow-sign backdrop-blur transition-[transform,background-color] duration-150 hover:bg-[#2c313c] active:scale-[0.98]",
+        "group font-display relative inline-flex h-12 min-w-11 select-none items-center gap-2 rounded-full border border-sodium/30 bg-ink-2/90 pr-3 pl-3 text-[15px] font-semibold tracking-tight text-fog shadow-sign backdrop-blur transition-[transform,background-color] duration-150 hover:bg-[#2c313c] active:scale-[0.98] sm:pr-4",
         className ?? "fixed right-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-30",
       )}
     >
@@ -29,7 +29,8 @@ export function ConciergeButton({ className }: { className?: string }) {
         aria-hidden="true"
       />
       <Sparkles className="h-5 w-5 text-sodium" aria-hidden="true" />
-      <span>Ask the city</span>
+      {/* Phones keep the icon only: the top bar has to fit six controls beside the street sign. */}
+      <span className="hidden sm:inline">Ask the city</span>
     </button>
   );
 }
