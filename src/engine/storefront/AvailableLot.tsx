@@ -8,7 +8,18 @@ import { StaticInstances, type InstanceTransform } from "@/engine/environment/St
 import { useCityStore } from "@/city/cityStore";
 import { eventPhase, formatLaunchTime } from "@/lib/events/status";
 import { now } from "@/lib/time/clock";
-import { GEO, ImageBanner, LedStrip, MAT, PosterPlane, localCollider, tinted, useMaxTextureSize, useQualityTier, useTextureMaterial } from "./templates/parts";
+import {
+  GEO,
+  ImageBanner,
+  LedStrip,
+  MAT,
+  PosterPlane,
+  localCollider,
+  tinted,
+  useMaxTextureSize,
+  useQualityTier,
+  useTextureMaterial,
+} from "./templates/parts";
 import { localToWorld } from "./types";
 import { glowColor, makeLabelTexture } from "./signage";
 
@@ -22,6 +33,8 @@ import { glowColor, makeLabelTexture } from "./signage";
 const SODIUM = "#ffc46b";
 const INK = "#1a1d24";
 const FOG = "#e9e6df";
+/** Palette for an unbranded lot (no event booked): one object, so memos keyed on it stay stable. */
+const LOT_BRAND = { primary: INK, secondary: "#2c313c", accent: SODIUM, onPrimary: FOG } as const;
 
 function signLocal(parcel: Parcel): { x: number; z: number } {
   return { x: 0, z: parcel.size.depth / 2 - 1.3 };
@@ -42,7 +55,12 @@ export function availableLotColliders(parcel: Parcel, event?: CityEvent): AABB[]
 }
 
 /** "Northline Supply pop-up opens at 8:00 PM" when a brand has booked the lot. */
-export function availableLotLabel(parcel: Parcel, event?: CityEvent, merchant?: Merchant, at: number = now()): string {
+export function availableLotLabel(
+  parcel: Parcel,
+  event?: CityEvent,
+  merchant?: Merchant,
+  at: number = now(),
+): string {
   if (event) {
     const who = merchant ? `${merchant.name} pop-up` : event.title;
     const phase = eventPhase(event, at);
@@ -52,7 +70,11 @@ export function availableLotLabel(parcel: Parcel, event?: CityEvent, merchant?: 
   return parcel.status === "reserved" ? "This lot is reserved" : "This lot is available";
 }
 
-export function availableLotHotspot(parcel: Parcel, event?: CityEvent, merchant?: Merchant): Hotspot {
+export function availableLotHotspot(
+  parcel: Parcel,
+  event?: CityEvent,
+  merchant?: Merchant,
+): Hotspot {
   const s = signLocal(parcel);
   const p = localToWorld(parcel, { x: s.x, z: s.z + 1.6 });
   return {
@@ -76,8 +98,11 @@ export function AvailableLot({ parcel }: { parcel: Parcel }) {
   const w = parcel.size.width - 1.6;
   const d = parcel.size.depth - 1.6;
   const reserved = parcel.status === "reserved";
-  const opensAt = useMemo(() => (event ? formatLaunchTime(event.startsAt, Math.max(now(), builtAt)) : ""), [event, builtAt]);
-  const brand = merchant?.brand ?? { primary: INK, secondary: "#2c313c", accent: SODIUM, onPrimary: FOG };
+  const opensAt = useMemo(
+    () => (event ? formatLaunchTime(event.startsAt, Math.max(now(), builtAt)) : ""),
+    [event, builtAt],
+  );
+  const brand = merchant?.brand ?? LOT_BRAND;
   const texture = useMemo(
     () =>
       makeLabelTexture(event ? "Coming tonight" : reserved ? "Reserved" : "Available", {
@@ -113,7 +138,15 @@ export function AvailableLot({ parcel }: { parcel: Parcel }) {
       const x = hoarding.x - hoarding.width / 2 + (hoarding.width / (n - 1)) * i;
       out.push({ x, y: panelY, z: hoarding.z - 0.08, sx: 0.12, sy: panelH + 0.3, sz: 0.12 });
       // Rear braces.
-      out.push({ x, y: panelY * 0.75, z: hoarding.z - 0.7, tiltX: -0.5, sx: 0.06, sy: panelH * 0.9, sz: 0.06 });
+      out.push({
+        x,
+        y: panelY * 0.75,
+        z: hoarding.z - 0.7,
+        tiltX: -0.5,
+        sx: 0.06,
+        sy: panelH * 0.9,
+        sz: 0.06,
+      });
     }
     return out;
   }, [hoarding.x, hoarding.width, hoarding.z, panelY]);
@@ -122,11 +155,41 @@ export function AvailableLot({ parcel }: { parcel: Parcel }) {
 
   return (
     <group position={[parcel.position.x, 0, parcel.position.z]} rotation={[0, parcel.rotationY, 0]}>
-      <mesh geometry={GEO.box} material={tinted("#2b2c33", { roughness: 0.95 })} position={[0, 0.04, 0]} scale={[w, 0.08, d]} receiveShadow />
-      <StaticInstances geometry={GEO.box} material={tinted(edgeColor, { emissive: edgeColor, emissiveIntensity: 0.45, roughness: 0.5 })} items={edges} />
-      <mesh geometry={GEO.cylinder} material={MAT.darkMetal} position={[sign.x, 1.1, sign.z]} scale={[0.05, 2.2, 0.05]} castShadow />
-      <mesh geometry={GEO.plane} material={material} position={[sign.x, 2.05, sign.z + 0.03]} scale={[1.4, 0.7, 1]} />
-      <mesh geometry={GEO.box} material={MAT.darkMetal} position={[sign.x, 2.05, sign.z - 0.02]} scale={[1.48, 0.78, 0.04]} />
+      <mesh
+        geometry={GEO.box}
+        material={tinted("#2b2c33", { roughness: 0.95 })}
+        position={[0, 0.04, 0]}
+        scale={[w, 0.08, d]}
+        receiveShadow
+      />
+      <StaticInstances
+        geometry={GEO.box}
+        material={tinted(edgeColor, {
+          emissive: edgeColor,
+          emissiveIntensity: 0.45,
+          roughness: 0.5,
+        })}
+        items={edges}
+      />
+      <mesh
+        geometry={GEO.cylinder}
+        material={MAT.darkMetal}
+        position={[sign.x, 1.1, sign.z]}
+        scale={[0.05, 2.2, 0.05]}
+        castShadow
+      />
+      <mesh
+        geometry={GEO.plane}
+        material={material}
+        position={[sign.x, 2.05, sign.z + 0.03]}
+        scale={[1.4, 0.7, 1]}
+      />
+      <mesh
+        geometry={GEO.box}
+        material={MAT.darkMetal}
+        position={[sign.x, 2.05, sign.z - 0.02]}
+        scale={[1.48, 0.78, 0.04]}
+      />
       {event && merchant && (
         <group>
           <StaticInstances geometry={GEO.box} material={MAT.brushed} items={posts} castShadow />
@@ -163,10 +226,36 @@ export function AvailableLot({ parcel }: { parcel: Parcel }) {
             height={panelH}
             emissive={0.8}
           />
-          <mesh geometry={GEO.box} material={tinted(brand.secondary, { roughness: 0.6, metalness: 0.3 })} position={[hoarding.x, panelY + panelH / 2 + 0.08, hoarding.z - 0.02]} scale={[hoarding.width + 0.3, 0.14, 0.2]} castShadow />
-          <mesh geometry={GEO.box} material={MAT.darkMetal} position={[hoarding.x, 0.1, hoarding.z - 0.02]} scale={[hoarding.width + 0.3, 0.2, 0.2]} />
-          <LedStrip from={hoarding.x - hoarding.width / 2} to={hoarding.x + hoarding.width / 2} y={panelY + panelH / 2 + 0.2} z={hoarding.z + 0.08} color={glowColor(brand)} count={Math.round(hoarding.width * 1.6)} />
-          {quality === "high" && <pointLight position={[hoarding.x, panelY + panelH / 2 + 0.6, hoarding.z + 1.6]} color={glowColor(brand)} intensity={9} distance={9} decay={2} />}
+          <mesh
+            geometry={GEO.box}
+            material={tinted(brand.secondary, { roughness: 0.6, metalness: 0.3 })}
+            position={[hoarding.x, panelY + panelH / 2 + 0.08, hoarding.z - 0.02]}
+            scale={[hoarding.width + 0.3, 0.14, 0.2]}
+            castShadow
+          />
+          <mesh
+            geometry={GEO.box}
+            material={MAT.darkMetal}
+            position={[hoarding.x, 0.1, hoarding.z - 0.02]}
+            scale={[hoarding.width + 0.3, 0.2, 0.2]}
+          />
+          <LedStrip
+            from={hoarding.x - hoarding.width / 2}
+            to={hoarding.x + hoarding.width / 2}
+            y={panelY + panelH / 2 + 0.2}
+            z={hoarding.z + 0.08}
+            color={glowColor(brand)}
+            count={Math.round(hoarding.width * 1.6)}
+          />
+          {quality === "high" && (
+            <pointLight
+              position={[hoarding.x, panelY + panelH / 2 + 0.6, hoarding.z + 1.6]}
+              color={glowColor(brand)}
+              intensity={9}
+              distance={9}
+              decay={2}
+            />
+          )}
         </group>
       )}
     </group>
