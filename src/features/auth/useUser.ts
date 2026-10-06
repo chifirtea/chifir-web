@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { hasSupabaseAuth } from "@/lib/env";
-import { getBrowserSupabase } from "@/lib/supabase/browser";
+import { loadBrowserSupabase } from "@/lib/supabase/browser";
 import { setAnalyticsUser, track } from "@/lib/analytics/client";
 import { consumeAuthEventCookie } from "./authEvent";
 
@@ -41,31 +41,42 @@ export function useUser(): UseUserResult {
   const [loading, setLoading] = useState<boolean>(hasSupabaseAuth);
 
   useEffect(() => {
-    const supabase = getBrowserSupabase();
     // Accounts off: `loading` already started as false and `user` stays null.
-    if (!supabase) return;
+    if (!hasSupabaseAuth) return;
 
     let cancelled = false;
-    supabase.auth.getUser().then(
-      ({ data }) => {
+    let subscription: { unsubscribe: () => void } | null = null;
+    loadBrowserSupabase().then(
+      (supabase) => {
         if (cancelled) return;
-        setUser(toAuthUser(data.user));
-        setLoading(false);
+        if (!supabase) {
+          setLoading(false);
+          return;
+        }
+        supabase.auth.getUser().then(
+          ({ data }) => {
+            if (cancelled) return;
+            setUser(toAuthUser(data.user));
+            setLoading(false);
+          },
+          () => {
+            if (!cancelled) setLoading(false);
+          },
+        );
+        subscription = supabase.auth.onAuthStateChange((_event, session) => {
+          if (cancelled) return;
+          setUser(toAuthUser(session?.user));
+          setLoading(false);
+        }).data.subscription;
       },
       () => {
+        // The SDK chunk failed to load: behave as signed out rather than loading forever.
         if (!cancelled) setLoading(false);
       },
     );
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (cancelled) return;
-      setUser(toAuthUser(session?.user));
-      setLoading(false);
-    });
     return () => {
       cancelled = true;
-      subscription.unsubscribe();
+      subscription?.unsubscribe();
     };
   }, []);
 
@@ -79,7 +90,7 @@ export function useUser(): UseUserResult {
   }, [userId]);
 
   const signOut = useCallback(async () => {
-    const supabase = getBrowserSupabase();
+    const supabase = await loadBrowserSupabase();
     if (!supabase) return;
     const { error } = await supabase.auth.signOut();
     if (error) throw new Error("Could not sign out. Try again.");

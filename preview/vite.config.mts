@@ -13,6 +13,7 @@ export default defineConfig({
       "@": src,
       "next/link": fileURLToPath(new URL("./shims/next-link.tsx", import.meta.url)),
       "next/navigation": fileURLToPath(new URL("./shims/next-navigation.ts", import.meta.url)),
+      "next/dynamic": fileURLToPath(new URL("./shims/next-dynamic.tsx", import.meta.url)),
       "server-only": fileURLToPath(new URL("./shims/empty.ts", import.meta.url)),
     },
   },

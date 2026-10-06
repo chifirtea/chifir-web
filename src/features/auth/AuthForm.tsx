@@ -6,7 +6,7 @@ import { useState, type FormEvent, type InputHTMLAttributes } from "react";
 import { z } from "zod";
 import { Button } from "@/components/ui";
 import { cn } from "@/lib/utils/cn";
-import { getBrowserSupabase } from "@/lib/supabase/browser";
+import { loadBrowserSupabase } from "@/lib/supabase/browser";
 import { setAnalyticsUser, track } from "@/lib/analytics/client";
 import { authPath, safeNextPath } from "./nextPath";
 import type { AuthFlow } from "./authEvent";
@@ -178,7 +178,7 @@ export function AuthForm({ mode, next, initialError }: AuthFormProps) {
     }
     setFieldErrors({});
 
-    const supabase = getBrowserSupabase();
+    const supabase = await loadBrowserSupabase();
     if (!supabase) {
       setFormError("Accounts are off in this build.");
       return;
@@ -243,7 +243,7 @@ export function AuthForm({ mode, next, initialError }: AuthFormProps) {
     }
     setFieldErrors({});
 
-    const supabase = getBrowserSupabase();
+    const supabase = await loadBrowserSupabase();
     if (!supabase) {
       setFormError("Accounts are off in this build.");
       return;

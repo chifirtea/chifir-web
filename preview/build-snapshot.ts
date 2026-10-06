@@ -4,20 +4,27 @@
  */
 import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { districts, parcels } from "../src/data/seed/districts";
+import { buildParcels, districts } from "../src/data/seed/districts";
 import { employees, merchants } from "../src/data/seed/merchants";
-import { products } from "../src/data/seed/products";
+import { buildProducts } from "../src/data/seed/products";
 import { rewards } from "../src/data/seed/rewards";
 import { buildEvents } from "../src/data/seed/events";
 import { buildOffers } from "../src/data/seed/offers";
 
 const now = new Date();
+// Parcels, products, events and offers all derive from one clock so the drop window agrees.
 const snapshot = {
   districts,
-  parcels,
+  parcels: buildParcels(now),
   merchants,
-  products,
-  employees: employees.map((e) => ({ id: e.id, merchantId: e.merchantId, name: e.name, role: e.role, greeting: e.greeting })),
+  products: buildProducts(now),
+  employees: employees.map((e) => ({
+    id: e.id,
+    merchantId: e.merchantId,
+    name: e.name,
+    role: e.role,
+    greeting: e.greeting,
+  })),
   events: buildEvents(now),
   offers: buildOffers(now),
   rewards,
@@ -25,4 +32,4 @@ const snapshot = {
 };
 const out = fileURLToPath(new URL("./snapshot.json", import.meta.url));
 writeFileSync(out, JSON.stringify(snapshot));
-console.log(`snapshot: ${merchants.length} merchants, ${products.length} products → ${out}`);
+console.log(`snapshot: ${merchants.length} merchants, ${snapshot.products.length} products → ${out}`);
